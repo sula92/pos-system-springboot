@@ -1,0 +1,29 @@
+{
+  "realm": "pos",
+  "enabled": true,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      { "name": "user", "description": "POS cashier: read data, place orders, manage customers" },
+      { "name": "admin", "description": "POS admin: user access plus items, inventory and reports" },
+      { "name": "super_admin", "description": "POS super admin: admin access plus deletes" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "pos-frontend",
+      "name": "POS frontend",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      }
+    }
+  ]
+}
