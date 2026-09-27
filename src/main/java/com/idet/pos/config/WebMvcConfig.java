@@ -108,7 +108,7 @@ public class WebMvcConfig {
         // Hibernate configuration properties
         Map<String, Object> properties = new HashMap<>();
         properties.put("hibernate.dialect", hibernateDialect);
-        properties.put("hibernate.ddl-auto", hibernateDdlAuto);  // Automatically create/drop tables
+        properties.put("hibernate.hbm2ddl.auto", hibernateDdlAuto);  // Automatically create/drop tables
         properties.put("hibernate.show_sql", showSql);
         properties.put("hibernate.format_sql", formatSql);
         properties.put("hibernate.use_sql_comments", useSqlComments);

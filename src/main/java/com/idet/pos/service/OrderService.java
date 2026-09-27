@@ -5,6 +5,7 @@ import com.idet.pos.dto.OrderDetailDTO;
 import com.idet.pos.dto.OrderSummaryDTO;
 import com.idet.pos.entity.Customer;
 import com.idet.pos.entity.Inventory;
+import com.idet.pos.entity.Item;
 import com.idet.pos.entity.Order;
 import com.idet.pos.entity.OrderDetail;
 import com.idet.pos.exception.InsufficientStockException;
@@ -80,13 +81,15 @@ public class OrderService {
         logger.info("Service: Customer found: " + customer.getId());
 
         Map<String, Integer> requestedQtyByItem = new HashMap<>();
+        Map<String, Item> itemCache = new HashMap<>();
         for (OrderDetailDTO detail : dto.getOrderDetails()) {
             if (!isValidOrderDetail(detail)) {
                 throw new InvalidRequestException("Invalid order detail for item: " + detail.getItemCode());
             }
 
-            itemRepository.findById(detail.getItemCode())
+            Item item = itemRepository.findById(detail.getItemCode())
                     .orElseThrow(() -> new ResourceNotFoundException("Item not found: " + detail.getItemCode()));
+            itemCache.put(item.getCode(), item);
 
             requestedQtyByItem.merge(detail.getItemCode(), detail.getQty(), Integer::sum);
         }
@@ -118,9 +121,11 @@ public class OrderService {
 
         for (OrderDetailDTO detail : dto.getOrderDetails()) {
             detail.setOrderId(savedOrder.getOrderId());
+            double catalogUnitPrice = itemCache.get(detail.getItemCode()).getUnitPrice();
+            detail.setUnitPrice(catalogUnitPrice);
 
             OrderDetail detailEntity = new OrderDetail(
-                    savedOrder.getOrderId(), detail.getItemCode(), detail.getQty(), detail.getUnitPrice());
+                    savedOrder.getOrderId(), detail.getItemCode(), detail.getQty(), catalogUnitPrice);
             orderDetailRepository.save(detailEntity);
             logger.info("Service: Order detail saved: " + savedOrder.getOrderId() + " - " + detail.getItemCode());
 
@@ -208,7 +213,7 @@ public class OrderService {
      */
     private String generateOrderId() {
         List<Order> allOrders = orderRepository.findAll();
-        return "O" + (allOrders.size() + 1);
+        return String.format("O%03d", allOrders.size() + 1);
     }
 }
 

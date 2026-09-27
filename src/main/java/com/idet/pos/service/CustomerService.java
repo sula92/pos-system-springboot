@@ -3,6 +3,7 @@ package com.idet.pos.service;
 import com.idet.pos.dto.CustomerDTO;
 import com.idet.pos.dto.CustomerPurchaseStatsDTO;
 import com.idet.pos.entity.Customer;
+import com.idet.pos.exception.InvalidRequestException;
 import com.idet.pos.exception.ResourceNotFoundException;
 import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.repository.CustomerRepository;
@@ -33,6 +34,12 @@ public class CustomerService {
      */
     public CustomerDTO saveCustomer(CustomerDTO dto) {
         logger.info("Service: Saving customer: " + dto.getName());
+        if (dto.getId() == null || dto.getId().isEmpty()) {
+            throw new InvalidRequestException("Customer ID is required");
+        }
+        if (customerRepository.existsById(dto.getId())) {
+            throw new InvalidRequestException("Customer already exists: " + dto.getId());
+        }
         Customer entity = new Customer(
                 dto.getId(), dto.getName(), dto.getAddress(), dto.getEmail());
         Customer saved = customerRepository.save(entity);
