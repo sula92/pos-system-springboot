@@ -1,0 +1,5 @@
+pos:
+  store-name: IDT POS Demo Store
+  currency: USD
+  max-items-per-order: 50
+
