@@ -45,6 +45,7 @@ public class InventoryService {
         return dtos;
     }
 
+
     @Transactional(readOnly = true)
     public List<InventoryStockViewProjection> findInventoryStockViews() {
         return inventoryRepository.findInventoryStockViews();
@@ -71,6 +72,21 @@ public class InventoryService {
             dtos.add(toDTO(inventory));
         }
         return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<InventoryDTO> findInStockNative() {
+        List<InventoryDTO> dtos = new ArrayList<>();
+        for (Inventory inventory : inventoryRepository.findInStockNative()) {
+            dtos.add(toDTO(inventory));
+        }
+        return dtos;
+    }
+
+    public InventoryDTO findInventoryForUpdate(String itemCode) {
+        Inventory inventory = inventoryRepository.findByItemCodeForUpdate(itemCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Inventory not found for item: " + itemCode));
+        return toDTO(inventory);
     }
 
     public InventoryDTO createInventory(InventoryDTO dto) {

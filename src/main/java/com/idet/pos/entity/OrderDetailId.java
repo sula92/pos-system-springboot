@@ -1,5 +1,6 @@
 package com.idet.pos.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import java.io.Serializable;
 import java.util.Objects;
@@ -11,7 +12,10 @@ import java.util.Objects;
 @Embeddable
 public class OrderDetailId implements Serializable {
 
+    @Column(name = "order_id")
     private String orderId;
+
+    @Column(name = "item_code")
     private String itemCode;
 
     public OrderDetailId() {}

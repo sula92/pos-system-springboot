@@ -10,6 +10,7 @@ import com.idet.pos.entity.OrderDetail;
 import com.idet.pos.exception.InsufficientStockException;
 import com.idet.pos.exception.InvalidRequestException;
 import com.idet.pos.exception.ResourceNotFoundException;
+import com.idet.pos.projection.OrderSummary;
 import com.idet.pos.projection.OrderSummaryProjection;
 import com.idet.pos.repository.CustomerRepository;
 import com.idet.pos.repository.InventoryRepository;
@@ -170,6 +171,7 @@ public class OrderService {
         return dtos;
     }
 
+
     @Transactional(readOnly = true)
     public List<OrderSummaryProjection> findOrderSummaries() {
         return orderRepository.findOrderSummaries();
@@ -178,6 +180,70 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderSummaryDTO> findOrderSummariesDto() {
         return orderRepository.findOrderSummariesDto();
+    }
+
+    @Transactional(readOnly = true)
+    public OrderDTO findOrderByDetailsGraph(String orderId) {
+        Order order = orderRepository.findByIdWithDetailsGraph(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        return toDTO(order);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findAllOrdersByDetailsGraph() {
+        return toDTOList(orderRepository.findAllWithDetailsGraph());
+    }
+
+    @Transactional(readOnly = true)
+    public OrderDTO findOrderByIdNative(String orderId) {
+        Order order = orderRepository.findByIdNative(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        return toDTO(order);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findAllOrdersNativeOrderByDateDesc() {
+        return toDTOList(orderRepository.findAllNativeOrderByDateDesc());
+    }
+
+    @Transactional(readOnly = true)
+    public long countOrdersByCustomerIdNative(String customerId) {
+        return orderRepository.countByCustomerIdNative(customerId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findOrdersByCustomerId(String customerId) {
+        return toDTOList(orderRepository.findByCustomerId(customerId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findOrdersByIdWithDetails(String orderId) {
+        return toDTOList(orderRepository.findByIdWithDetails(orderId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findOrdersByIdWithDetailsGraph2(String orderId) {
+        return toDTOList(orderRepository.findByIdWithDetailsGraph2(orderId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderSummary> findOrderSummariesWithConstructor() {
+        return orderRepository.findOrderSummariesWithConstructor();
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findAllOrdersWithCustomer() {
+        return toDTOList(orderRepository.findAllWithCustomer());
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findAllOrdersWithCustomerAndDetails() {
+        return toDTOList(orderRepository.findAllWithCustomerAndDetails());
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderDTO> findOrdersByIdWithCustomer(String orderId) {
+        return toDTOList(orderRepository.findByIdWithCustomer(orderId));
     }
 
     /**
@@ -209,6 +275,30 @@ public class OrderService {
     private String generateOrderId() {
         List<Order> allOrders = orderRepository.findAll();
         return "O" + (allOrders.size() + 1);
+    }
+
+    private List<OrderDTO> toDTOList(List<Order> orders) {
+        List<OrderDTO> dtos = new ArrayList<>();
+        for (Order order : orders) {
+            dtos.add(toDTO(order));
+        }
+        return dtos;
+    }
+
+    private OrderDTO toDTO(Order orderEntity) {
+        List<OrderDetailDTO> detailDTOs = new ArrayList<>();
+
+        if (orderEntity.getOrderDetails() != null && !orderEntity.getOrderDetails().isEmpty()) {
+            for (OrderDetail d : orderEntity.getOrderDetails()) {
+                detailDTOs.add(new OrderDetailDTO(d.getOrderId(), d.getItemCode(), d.getQty(), d.getUnitPrice()));
+            }
+        } else {
+            for (OrderDetail d : orderDetailRepository.findByOrderId(orderEntity.getOrderId())) {
+                detailDTOs.add(new OrderDetailDTO(d.getOrderId(), d.getItemCode(), d.getQty(), d.getUnitPrice()));
+            }
+        }
+
+        return new OrderDTO(orderEntity.getOrderId(), orderEntity.getDate(), orderEntity.getCustomerId(), detailDTOs);
     }
 }
 

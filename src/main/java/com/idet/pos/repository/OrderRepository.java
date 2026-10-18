@@ -2,10 +2,11 @@ package com.idet.pos.repository;
 
 import com.idet.pos.dto.OrderSummaryDTO;
 import com.idet.pos.entity.Order;
+import com.idet.pos.projection.OrderSummary;
 import com.idet.pos.projection.OrderSummaryProjection;
 import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -54,13 +55,45 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query(value = "SELECT COUNT(*) FROM orders WHERE customer_id = :customerId", nativeQuery = true)
     long countByCustomerIdNative(@Param("customerId") String customerId);
 
+    @Query("SELECT o FROM Order o WHERE o.customerId = :customerId ORDER BY o.date DESC")
+    List<Order> findByCustomerId(@Param("customerId") String customerId);
+
+    /*@EntityGraph(value = "Order.withDetails", type = EntityGraph.EntityGraphType.LOAD)
+    @Query("SELECT o FROM Order WHERE o.id = :orderId")
+    List<Order> findByIdWithDetailsGraph(@Param("orderId") String id);*/
+
+    @Query("SELECT o FROM Order o WHERE o.orderId = :orderId")
+    List<Order> findByIdWithDetails(@Param("orderId") String orderId);
+
+
+    @EntityGraph(attributePaths = {"orderDetails"})
+    @Query("SELECT o FROM Order o WHERE o.orderId = :orderId")
+    List<Order> findByIdWithDetailsGraph2(@Param("orderId") String orderId);
+
+    // Custom projection using constructor expression
+    @Query("SELECT new com.idet.pos.projection.OrderSummary(o.orderId, o.date, COALESCE(c.name, o.customerId)) " +
+            "FROM Order o LEFT JOIN Customer c ON c.id = o.customerId")
+    List<OrderSummary> findOrderSummariesWithConstructor();
+
+    // JOIN FETCH - Eagerly loads customer association to avoid N+1 query problem
+    @Query("SELECT o FROM Order o ORDER BY o.date DESC")
+    List<Order> findAllWithCustomer();
+
+    // JOIN FETCH - Eagerly loads both customer and orderDetails associations
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.orderDetails ORDER BY o.date DESC")
+    List<Order> findAllWithCustomerAndDetails();
+
+    // JOIN FETCH with WHERE clause - Eagerly loads customer for a specific order
+    @Query("SELECT o FROM Order o WHERE o.orderId = :orderId")
+    List<Order> findByIdWithCustomer(@Param("orderId") String orderId);
+
     // Projection query that returns a report-style shape instead of Order entities.
     @Query("SELECT o.orderId AS orderId, " +
             "o.date AS orderDate, " +
             "o.customerId AS customerId, " +
             "COUNT(od) AS lineCount, " +
             "COALESCE(SUM(od.qty), 0) AS totalQty, " +
-            "COALESCE(SUM(od.qty * od.unitPrice), 0) AS grandTotal " +
+            "COALESCE(SUM(od.qty * od.unitPrice), 0.0) AS grandTotal " +
             "FROM Order o LEFT JOIN o.orderDetails od " +
             "GROUP BY o.orderId, o.date, o.customerId " +
             "ORDER BY o.date DESC")
@@ -79,5 +112,3 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             "ORDER BY o.date DESC")
     List<OrderSummaryDTO> findOrderSummariesDto();
 }
-
-

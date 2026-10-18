@@ -11,7 +11,10 @@ import java.util.List;
  * This entity represents a sales order in the POS system.
  */
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", indexes = {
+		@Index(columnList = "order_id"),
+		@Index(columnList = "customer_id")
+})
 @NamedQueries({
 		@NamedQuery(
 				name = "Order.findByCustomerId",

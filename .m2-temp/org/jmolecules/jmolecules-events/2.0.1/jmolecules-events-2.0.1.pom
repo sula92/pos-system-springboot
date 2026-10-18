@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.jmolecules</groupId>
+  <artifactId>jmolecules-events</artifactId>
+  <version>2.0.1</version>
+  <name>jMolecules - Events</name>
+  <description>Architectural concepts in Java</description>
+  <url>https://github.com/xmolecules/jmolecules/jmolecules-events</url>
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>odrotbohm</id>
+      <name>Oliver Drotbohm</name>
+      <email>info@odrotbohm.de</email>
+    </developer>
+    <developer>
+      <id>hschwentner</id>
+      <name>Henning Schwentner</name>
+      <email>hs@wps.de</email>
+      <organization>WPS – Workplace Solutions GmbH</organization>
+      <organizationUrl>https://www.wps.de</organizationUrl>
+    </developer>
+    <developer>
+      <id>spirnbaum</id>
+      <name>Stephan Pirnbaum</name>
+      <email>stephan.pirnbaum@buschmais.com</email>
+      <organization>buschmais GbR</organization>
+      <organizationUrl>https://www.buschmais.de</organizationUrl>
+    </developer>
+  </developers>
+  <contributors>
+    <contributor>
+      <name>Sascha Kohlmann</name>
+      <email>sascha.kohlmann@gmail.com</email>
+    </contributor>
+  </contributors>
+  <scm>
+    <connection>scm:git:https://github.com/xmolecules/jmolecules/jmolecules-events</connection>
+    <developerConnection>scm:git:ssh://git@github.com/xmolecules/jmolecules.git/jmolecules-events</developerConnection>
+    <tag>2.0.1</tag>
+    <url>https://github.com/xmolecules/jmolecules/jmolecules-events</url>
+  </scm>
+  <dependencies>
+    <dependency>
+      <groupId>org.jmolecules</groupId>
+      <artifactId>jstereotype</artifactId>
+      <version>2.0.1</version>
+      <scope>compile</scope>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,9 +1,29 @@
 package com.idet.pos.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
 public class CustomerDTO {
+    @Schema(description = "Customer ID", example = "C001", requiredMode = Schema.RequiredMode.REQUIRED, pattern = "^C\\d{3}$")
+    @NotBlank(message = "Customer ID is required")
+    @Pattern(regexp = "^C\\d{3}$", message = "Customer ID must match C followed by 3 digits (e.g. C001)")
     private String id;
+
+    @Schema(description = "Customer name", example = "Nimal Perera", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
+    @NotBlank(message = "Customer name is required")
+    @Size(max = 100, message = "Customer name must be at most 100 characters")
     private String name;
+
+    @Schema(description = "Customer address", example = "Colombo", maxLength = 255)
+    @Size(max = 255, message = "Address must be at most 255 characters")
     private String address;
+
+    @Schema(description = "Customer email", example = "nimal@example.com", format = "email", maxLength = 150)
+    @Email(message = "Email format is invalid")
+    @Size(max = 150, message = "Email must be at most 150 characters")
     private String email;
 
     public CustomerDTO() {}

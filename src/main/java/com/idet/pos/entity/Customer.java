@@ -8,7 +8,10 @@ import jakarta.persistence.*;
  * This entity represents a customer in the POS system.
  */
 @Entity
-@Table(name = "customers")
+@Table(name = "customers", indexes = {
+        @Index(columnList = "id"),
+        @Index(columnList = "email")
+})
 @NamedQueries({
         @NamedQuery(
                 name = "Customer.findByEmail",

@@ -105,6 +105,7 @@ public class ItemService {
         return dtos;
     }
 
+
     @Transactional(readOnly = true)
     public List<ItemDTO> searchItemsByDescription(String keyword) {
         List<ItemDTO> dtos = new ArrayList<>();
@@ -121,6 +122,38 @@ public class ItemService {
             dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
         }
         return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ItemDTO> findItemsByCodeContains(String codePart) {
+        List<ItemDTO> dtos = new ArrayList<>();
+        for (Item entity : itemRepository.findByCodeContainingIgnoreCase(codePart)) {
+            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ItemDTO> findItemsByPriceRange(double minPrice, double maxPrice) {
+        List<ItemDTO> dtos = new ArrayList<>();
+        for (Item entity : itemRepository.findByUnitPriceBetween(minPrice, maxPrice)) {
+            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ItemDTO> findItemsByCodeExact(String code) {
+        List<ItemDTO> dtos = new ArrayList<>();
+        for (Item entity : itemRepository.findByCode(code)) {
+            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean existsByDescriptionIgnoreCase(String description) {
+        return itemRepository.existsByDescriptionIgnoreCase(description);
     }
 }
 

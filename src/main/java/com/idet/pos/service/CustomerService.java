@@ -4,7 +4,10 @@ import com.idet.pos.dto.CustomerDTO;
 import com.idet.pos.dto.CustomerPurchaseStatsDTO;
 import com.idet.pos.entity.Customer;
 import com.idet.pos.exception.ResourceNotFoundException;
+import com.idet.pos.projection.CustomerBasicProjection;
+import com.idet.pos.projection.CustomerOrderCountProjection;
 import com.idet.pos.projection.CustomerPurchaseStatsProjection;
+import com.idet.pos.projection.CustomerSummary;
 import com.idet.pos.repository.CustomerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -85,10 +88,11 @@ public class CustomerService {
         logger.info("Service: Fetching all customers");
         List<CustomerDTO> dtos = new ArrayList<>();
         for (Customer entity : customerRepository.findAll()) {
-            dtos.add(new CustomerDTO(entity.getId(), entity.getName(), entity.getAddress(), entity.getEmail()));
+            dtos.add(toDTO(entity));
         }
         return dtos;
     }
+
 
     @Transactional(readOnly = true)
     public List<CustomerPurchaseStatsProjection> findCustomerPurchaseStats() {
@@ -104,7 +108,16 @@ public class CustomerService {
     public List<CustomerDTO> searchCustomersByName(String namePart) {
         List<CustomerDTO> dtos = new ArrayList<>();
         for (Customer entity : customerRepository.findByNameContainingIgnoreCase(namePart)) {
-            dtos.add(new CustomerDTO(entity.getId(), entity.getName(), entity.getAddress(), entity.getEmail()));
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> searchCustomersByNameJpql(String namePart) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.searchByName(namePart)) {
+            dtos.add(toDTO(entity));
         }
         return dtos;
     }
@@ -113,7 +126,107 @@ public class CustomerService {
     public CustomerDTO findCustomerByEmail(String email) {
         Customer customer = customerRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with email: " + email));
-        return new CustomerDTO(customer.getId(), customer.getName(), customer.getAddress(), customer.getEmail());
+        return toDTO(customer);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> findCustomersByExactName(String name) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.findByName(name)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> findCustomersByExactEmail(String email) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.findByEmail(email)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> findCustomersByAddress(String address) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.findByAddress(address)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> searchCustomersByEmail(String email) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.searchByEmail(email)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> searchCustomersByAddress(String address) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.searchByAddress(address)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> searchCustomersByNameEmailAddress(String keyword) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.searchByNameOrEmailOrAddress(keyword, keyword, keyword)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> searchCustomersByNameEmailAddressId(String keyword) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.searchByNameOrEmailOrAddressOrId(keyword, keyword, keyword, keyword)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> findAllCustomersNative() {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.findAllNative()) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerDTO> findCustomersByNameNative(String name) {
+        List<CustomerDTO> dtos = new ArrayList<>();
+        for (Customer entity : customerRepository.findByNameNative(name)) {
+            dtos.add(toDTO(entity));
+        }
+        return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerBasicProjection> findCustomersWithOrders() {
+        return customerRepository.findCustomersWithOrders();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerOrderCountProjection> findCustomersWithOrderCount() {
+        return customerRepository.findCustomersWithOrderCount();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerSummary> findCustomerSummaries() {
+        return customerRepository.findCustomerSummaries();
+    }
+
+    private CustomerDTO toDTO(Customer entity) {
+        return new CustomerDTO(entity.getId(), entity.getName(), entity.getAddress(), entity.getEmail());
     }
 }
 
