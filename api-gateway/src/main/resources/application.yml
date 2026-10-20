@@ -1,0 +1,72 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: customer-service
+              uri: lb://customer-service
+              predicates:
+                - Path=/pos-system/customer/**,/pos-system/demo/**,/pos-system/api/config/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: customerService
+                    fallbackUri: forward:/fallback/customer-service
+            - id: item-service-internal-block
+              uri: no://op
+              order: -1
+              predicates:
+                - Path=/pos-system/inventory/internal/**
+              filters:
+                - SetStatus=404
+            - id: item-service
+              uri: lb://item-service
+              predicates:
+                - Path=/pos-system/item/**,/pos-system/inventory/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: itemService
+                    fallbackUri: forward:/fallback/item-service
+            - id: order-service-internal-block
+              uri: no://op
+              order: -1
+              predicates:
+                - Path=/pos-system/order/internal/**
+              filters:
+                - SetStatus=404
+            - id: order-service
+              uri: lb://order-service
+              predicates:
+                - Path=/pos-system/order/**,/pos-system/order-detail/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: orderService
+                    fallbackUri: forward:/fallback/order-service
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
