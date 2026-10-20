@@ -15,6 +15,7 @@ start() {
   java -jar "$module/target/$module-$VERSION.jar" \
     --eureka.client.registry-fetch-interval-seconds=5 \
     --eureka.instance.lease-renewal-interval-in-seconds=5 \
+    --spring.cloud.loadbalancer.cache.ttl=5s \
     > "$LOG_DIR/$module.log" 2>&1 &
   PIDS[$module]=$!
   echo "started $module (pid ${PIDS[$module]})"
@@ -71,10 +72,19 @@ start item-service
 start order-service
 start api-gateway
 
-# Routing through the gateway only works once each service is registered and the gateway has fetched the registry.
+# Wait for registration in Eureka first. Polling the gateway before the services are registered
+# counts as failures and can open the gateway circuit breakers.
+for app in CUSTOMER-SERVICE ITEM-SERVICE ORDER-SERVICE API-GATEWAY; do
+  wait_for "$app registered in Eureka" "http://localhost:8761/eureka/apps/$app"
+done
+# Give every client time to refresh its registry copy and load-balancer cache.
+sleep 15
+
 wait_for "gateway -> customer-service" "$GW/customer"
 wait_for "gateway -> item-service" "$GW/item"
 wait_for "gateway -> order-service" "$GW/order"
+# If a breaker opened during start-up, let it move to half-open before the real checks.
+sleep 11
 
 # Data set-up through the gateway
 expect "create customer" 201 "$(status POST "$GW/customer" '{"id":"C001","name":"Nimal Perera","address":"Colombo","email":"nimal@example.com"}')"
