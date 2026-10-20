@@ -1,6 +1,10 @@
 package com.idet.pos.service;
 
+import com.idet.pos.client.CustomerOrderTotals;
+import com.idet.pos.client.OrderStatsClient;
 import com.idet.pos.dto.CustomerDTO;
+import com.idet.pos.dto.CustomerOrderCountDTO;
+import com.idet.pos.dto.CustomerPurchaseStatsDTO;
 import com.idet.pos.entity.Customer;
 import com.idet.pos.exception.ResourceNotFoundException;
 import com.idet.pos.repository.CustomerRepository;
@@ -9,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +30,9 @@ class CustomerServiceTest {
 
     @Mock
     private CustomerRepository customerRepository;
+
+    @Mock
+    private OrderStatsClient orderStatsClient;
 
     @InjectMocks
     private CustomerService customerService;
@@ -89,5 +97,70 @@ class CustomerServiceTest {
         verify(customerRepository).existsById("C404");
         verifyNoMoreInteractions(customerRepository);
     }
-}
 
+    @Test
+    void findCustomerPurchaseStats_mergesOrderTotalsAndSortsByName() {
+        when(customerRepository.findAll()).thenReturn(List.of(
+                new Customer("C001", "Nimal", "Colombo", "nimal@example.com"),
+                new Customer("C002", "Kamal", "Galle", "kamal@example.com")
+        ));
+        when(orderStatsClient.fetchCustomerTotals())
+                .thenReturn(Flux.just(new CustomerOrderTotals("C001", 2, 450.0)));
+
+        List<CustomerPurchaseStatsDTO> result = customerService.findCustomerPurchaseStats().block();
+
+        assertEquals(2, result.size());
+        assertEquals("C002", result.get(0).getCustomerId());
+        assertEquals(0L, result.get(0).getTotalOrders());
+        assertEquals(0.0, result.get(0).getTotalSpent());
+        assertEquals("C001", result.get(1).getCustomerId());
+        assertEquals("Nimal", result.get(1).getCustomerName());
+        assertEquals(2L, result.get(1).getTotalOrders());
+        assertEquals(450.0, result.get(1).getTotalSpent());
+    }
+
+    @Test
+    void findCustomerPurchaseStats_whenOrderServiceFallsBack_returnsZeroTotals() {
+        when(customerRepository.findAll()).thenReturn(List.of(
+                new Customer("C001", "Nimal", "Colombo", "nimal@example.com")
+        ));
+        when(orderStatsClient.fetchCustomerTotals()).thenReturn(Flux.empty());
+
+        List<CustomerPurchaseStatsDTO> result = customerService.findCustomerPurchaseStats().block();
+
+        assertEquals(1, result.size());
+        assertEquals(0L, result.getFirst().getTotalOrders());
+        assertEquals(0.0, result.getFirst().getTotalSpent());
+    }
+
+    @Test
+    void findCustomersWithOrders_returnsOnlyCustomersThatHaveOrders() {
+        when(customerRepository.findAll()).thenReturn(List.of(
+                new Customer("C001", "Nimal", "Colombo", "nimal@example.com"),
+                new Customer("C002", "Kamal", "Galle", "kamal@example.com")
+        ));
+        when(orderStatsClient.fetchCustomerTotals())
+                .thenReturn(Flux.just(new CustomerOrderTotals("C002", 1, 100.0)));
+
+        List<CustomerDTO> result = customerService.findCustomersWithOrders().block();
+
+        assertEquals(1, result.size());
+        assertEquals("C002", result.getFirst().getId());
+    }
+
+    @Test
+    void findCustomersWithOrderCount_includesCustomersWithoutOrders() {
+        when(customerRepository.findAll()).thenReturn(List.of(
+                new Customer("C001", "Nimal", "Colombo", "nimal@example.com"),
+                new Customer("C002", "Kamal", "Galle", "kamal@example.com")
+        ));
+        when(orderStatsClient.fetchCustomerTotals())
+                .thenReturn(Flux.just(new CustomerOrderTotals("C001", 3, 900.0)));
+
+        List<CustomerOrderCountDTO> result = customerService.findCustomersWithOrderCount().block();
+
+        assertEquals(2, result.size());
+        assertEquals(3L, result.get(0).getOrderCount());
+        assertEquals(0L, result.get(1).getOrderCount());
+    }
+}
