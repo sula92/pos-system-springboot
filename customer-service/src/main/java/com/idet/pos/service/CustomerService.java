@@ -1,19 +1,24 @@
 package com.idet.pos.service;
 
+import com.idet.pos.client.CustomerOrderTotals;
+import com.idet.pos.client.OrderStatsClient;
 import com.idet.pos.dto.CustomerDTO;
+import com.idet.pos.dto.CustomerOrderCountDTO;
 import com.idet.pos.dto.CustomerPurchaseStatsDTO;
 import com.idet.pos.entity.Customer;
 import com.idet.pos.exception.ResourceNotFoundException;
-import com.idet.pos.projection.CustomerBasicProjection;
-import com.idet.pos.projection.CustomerOrderCountProjection;
-import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.projection.CustomerSummary;
 import com.idet.pos.repository.CustomerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -29,6 +34,9 @@ public class CustomerService {
 
     @Autowired
     private CustomerRepository customerRepository;
+
+    @Autowired
+    private OrderStatsClient orderStatsClient;
 
     /**
      * Save a new customer
@@ -94,14 +102,28 @@ public class CustomerService {
     }
 
 
-    @Transactional(readOnly = true)
-    public List<CustomerPurchaseStatsProjection> findCustomerPurchaseStats() {
-        return customerRepository.findCustomerPurchaseStats();
-    }
-
-    @Transactional(readOnly = true)
-    public List<CustomerPurchaseStatsDTO> findCustomerPurchaseStatsDto() {
-        return customerRepository.findCustomerPurchaseStatsDto();
+    /**
+     * Purchase statistics per customer, ordered by name.
+     * Customers come from this service; order totals come from order-service (WebClient).
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Mono<List<CustomerPurchaseStatsDTO>> findCustomerPurchaseStats() {
+        return Mono.zip(loadCustomers(), loadOrderTotals())
+                .map(result -> {
+                    Map<String, CustomerOrderTotals> totals = result.getT2();
+                    List<CustomerPurchaseStatsDTO> stats = new ArrayList<>();
+                    for (Customer customer : sortedByName(result.getT1())) {
+                        CustomerOrderTotals customerTotals = totals.get(customer.getId());
+                        stats.add(new CustomerPurchaseStatsDTO(
+                                customer.getId(),
+                                customer.getName(),
+                                customer.getEmail(),
+                                customerTotals != null ? customerTotals.orderCount() : 0L,
+                                customerTotals != null ? customerTotals.totalAmount() : 0.0
+                        ));
+                    }
+                    return stats;
+                });
     }
 
     @Transactional(readOnly = true)
@@ -210,19 +232,65 @@ public class CustomerService {
         return dtos;
     }
 
-    @Transactional(readOnly = true)
-    public List<CustomerBasicProjection> findCustomersWithOrders() {
-        return customerRepository.findCustomersWithOrders();
+    /**
+     * Customers that have at least one order (order data from order-service).
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Mono<List<CustomerDTO>> findCustomersWithOrders() {
+        return Mono.zip(loadCustomers(), loadOrderTotals())
+                .map(result -> {
+                    Map<String, CustomerOrderTotals> totals = result.getT2();
+                    List<CustomerDTO> dtos = new ArrayList<>();
+                    for (Customer customer : result.getT1()) {
+                        CustomerOrderTotals customerTotals = totals.get(customer.getId());
+                        if (customerTotals != null && customerTotals.orderCount() > 0) {
+                            dtos.add(toDTO(customer));
+                        }
+                    }
+                    return dtos;
+                });
     }
 
-    @Transactional(readOnly = true)
-    public List<CustomerOrderCountProjection> findCustomersWithOrderCount() {
-        return customerRepository.findCustomersWithOrderCount();
+    /**
+     * Every customer with their order count; customers without orders get zero.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Mono<List<CustomerOrderCountDTO>> findCustomersWithOrderCount() {
+        return Mono.zip(loadCustomers(), loadOrderTotals())
+                .map(result -> {
+                    Map<String, CustomerOrderTotals> totals = result.getT2();
+                    List<CustomerOrderCountDTO> counts = new ArrayList<>();
+                    for (Customer customer : result.getT1()) {
+                        CustomerOrderTotals customerTotals = totals.get(customer.getId());
+                        counts.add(new CustomerOrderCountDTO(
+                                customer.getId(),
+                                customer.getName(),
+                                customerTotals != null ? customerTotals.orderCount() : 0L
+                        ));
+                    }
+                    return counts;
+                });
     }
 
     @Transactional(readOnly = true)
     public List<CustomerSummary> findCustomerSummaries() {
         return customerRepository.findCustomerSummaries();
+    }
+
+    private Mono<List<Customer>> loadCustomers() {
+        return Mono.fromCallable(() -> customerRepository.findAll())
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private Mono<Map<String, CustomerOrderTotals>> loadOrderTotals() {
+        return orderStatsClient.fetchCustomerTotals()
+                .collectMap(CustomerOrderTotals::customerId);
+    }
+
+    private List<Customer> sortedByName(List<Customer> customers) {
+        List<Customer> sorted = new ArrayList<>(customers);
+        sorted.sort(Comparator.comparing(Customer::getName, Comparator.nullsLast(Comparator.naturalOrder())));
+        return sorted;
     }
 
     private CustomerDTO toDTO(Customer entity) {

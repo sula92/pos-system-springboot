@@ -1,10 +1,6 @@
 package com.idet.pos.repository;
 
-import com.idet.pos.dto.CustomerPurchaseStatsDTO;
 import com.idet.pos.entity.Customer;
-import com.idet.pos.projection.CustomerBasicProjection;
-import com.idet.pos.projection.CustomerOrderCountProjection;
-import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.projection.CustomerSummary;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -68,41 +64,6 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
     @Query(value = "SELECT * FROM customers WHERE name = :name", nativeQuery = true)
     List<Customer> findByNameNative(@Param("name") String name);
 
-    @Query("SELECT c.id AS id, c.name AS name, c.email AS email, c.address AS address " +
-            "FROM Customer c JOIN Order o ON o.customerId = c.id " +
-            "GROUP BY c.id, c.name, c.email, c.address")
-    List<CustomerBasicProjection> findCustomersWithOrders();
-
-    @Query("SELECT c.id AS id, c.name AS name, COUNT(o.orderId) AS orderCount " +
-            "FROM Customer c LEFT JOIN Order o ON o.customerId = c.id " +
-            "GROUP BY c.id, c.name")
-    List<CustomerOrderCountProjection> findCustomersWithOrderCount();
-
     @Query("SELECT new com.idet.pos.projection.CustomerSummary(c.id, c.name, c.email) FROM Customer c")
     List<CustomerSummary> findCustomerSummaries();
-
-    @Query(value = "SELECT c.id AS customerId, " +
-            "c.name AS customerName, " +
-            "c.email AS email, " +
-            "COUNT(DISTINCT o.order_id) AS totalOrders, " +
-            "COALESCE(SUM(od.qty * od.unit_price), 0) AS totalSpent " +
-            "FROM customers c " +
-            "LEFT JOIN orders o ON o.customer_id = c.id " +
-            "LEFT JOIN order_details od ON od.order_id = o.order_id " +
-            "GROUP BY c.id, c.name, c.email " +
-            "ORDER BY c.name", nativeQuery = true)
-    List<CustomerPurchaseStatsProjection> findCustomerPurchaseStats();
-
-    default List<CustomerPurchaseStatsDTO> findCustomerPurchaseStatsDto() {
-        return findCustomerPurchaseStats()
-                .stream()
-                .map(row -> new CustomerPurchaseStatsDTO(
-                        row.getCustomerId(),
-                        row.getCustomerName(),
-                        row.getEmail(),
-                        row.getTotalOrders() != null ? row.getTotalOrders() : 0L,
-                        row.getTotalSpent() != null ? row.getTotalSpent() : 0.0
-                ))
-                .toList();
-    }
 }

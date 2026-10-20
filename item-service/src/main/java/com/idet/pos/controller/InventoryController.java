@@ -2,6 +2,7 @@ package com.idet.pos.controller;
 
 import com.idet.pos.dto.InventoryDTO;
 import com.idet.pos.dto.InventoryStockValueView;
+import com.idet.pos.dto.StockLineDTO;
 import com.idet.pos.projection.InventoryStockViewProjection;
 import com.idet.pos.service.InventoryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -155,6 +156,29 @@ public class InventoryController {
             String code
     ) {
         return ResponseEntity.ok(inventoryService.findInventoryForUpdate(code));
+    }
+
+    @PostMapping("/internal/reserve")
+    @Operation(summary = "Reserve stock (internal)", description = "Atomically check and decrement stock for an order. Called by order-service; not routed through the gateway")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Stock reserved"),
+            @ApiResponse(responseCode = "404", description = "Item or inventory not found"),
+            @ApiResponse(responseCode = "409", description = "Insufficient stock; nothing was reserved")
+    })
+    public ResponseEntity<Void> reserveStock(@RequestBody List<StockLineDTO> lines) {
+        inventoryService.reserveStock(lines);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/internal/release")
+    @Operation(summary = "Release stock (internal)", description = "Add previously reserved stock back. Called by order-service as compensation; not routed through the gateway")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Stock released"),
+            @ApiResponse(responseCode = "404", description = "Inventory not found")
+    })
+    public ResponseEntity<Void> releaseStock(@RequestBody List<StockLineDTO> lines) {
+        inventoryService.releaseStock(lines);
+        return ResponseEntity.noContent().build();
     }
 }
 

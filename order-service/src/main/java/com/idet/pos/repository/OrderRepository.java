@@ -2,6 +2,7 @@ package com.idet.pos.repository;
 
 import com.idet.pos.dto.OrderSummaryDTO;
 import com.idet.pos.entity.Order;
+import com.idet.pos.projection.CustomerOrderTotalsProjection;
 import com.idet.pos.projection.OrderSummary;
 import com.idet.pos.projection.OrderSummaryProjection;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -70,9 +71,9 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query("SELECT o FROM Order o WHERE o.orderId = :orderId")
     List<Order> findByIdWithDetailsGraph2(@Param("orderId") String orderId);
 
-    // Custom projection using constructor expression
-    @Query("SELECT new com.idet.pos.projection.OrderSummary(o.orderId, o.date, COALESCE(c.name, o.customerId)) " +
-            "FROM Order o LEFT JOIN Customer c ON c.id = o.customerId")
+    // Custom projection using constructor expression.
+    // Customers live in customer-service, so the summary carries the customer id instead of the name.
+    @Query("SELECT new com.idet.pos.projection.OrderSummary(o.orderId, o.date, o.customerId) FROM Order o")
     List<OrderSummary> findOrderSummariesWithConstructor();
 
     // JOIN FETCH - Eagerly loads customer association to avoid N+1 query problem
@@ -111,4 +112,12 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             "GROUP BY o.orderId, o.date, o.customerId " +
             "ORDER BY o.date DESC")
     List<OrderSummaryDTO> findOrderSummariesDto();
+
+    // Order count and amount spent per customer; read by customer-service for purchase analytics.
+    @Query("SELECT o.customerId AS customerId, " +
+            "COUNT(DISTINCT o.orderId) AS orderCount, " +
+            "COALESCE(SUM(od.qty * od.unitPrice), 0.0) AS totalAmount " +
+            "FROM Order o LEFT JOIN o.orderDetails od " +
+            "GROUP BY o.customerId")
+    List<CustomerOrderTotalsProjection> findCustomerOrderTotals();
 }

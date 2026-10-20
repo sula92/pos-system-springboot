@@ -1,12 +1,10 @@
 package com.idet.pos.controller;
 
 import com.idet.pos.service.CustomerService;
+import com.idet.pos.dto.CustomerOrderCountDTO;
 import com.idet.pos.dto.CustomerPurchaseStatsDTO;
 import com.idet.pos.dto.CustomerDTO;
 import com.idet.pos.exception.InvalidRequestException;
-import com.idet.pos.projection.CustomerBasicProjection;
-import com.idet.pos.projection.CustomerOrderCountProjection;
-import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.projection.CustomerSummary;
 import com.idet.pos.validation.ValidCustomerId;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -136,17 +135,17 @@ public class CustomerController {
     }
 
     @GetMapping("/purchase-stats")
-    @Operation(summary = "Customer purchase stats", description = "Get customer purchase statistics using interface projection")
+    @Operation(summary = "Customer purchase stats", description = "Get customer purchase statistics; order totals are read reactively from order-service")
     @ApiResponse(responseCode = "200", description = "Customer purchase stats fetched")
-    public ResponseEntity<List<CustomerPurchaseStatsProjection>> getCustomerPurchaseStats() {
-        return ResponseEntity.ok(customerService.findCustomerPurchaseStats());
+    public Mono<ResponseEntity<List<CustomerPurchaseStatsDTO>>> getCustomerPurchaseStats() {
+        return customerService.findCustomerPurchaseStats().map(ResponseEntity::ok);
     }
 
     @GetMapping("/purchase-stats-dto")
-    @Operation(summary = "Customer purchase stats DTO", description = "Get customer purchase statistics mapped to DTO objects")
+    @Operation(summary = "Customer purchase stats DTO", description = "Get customer purchase statistics mapped to DTO objects; order totals are read reactively from order-service")
     @ApiResponse(responseCode = "200", description = "Customer purchase stats DTO fetched")
-    public ResponseEntity<List<CustomerPurchaseStatsDTO>> getCustomerPurchaseStatsDto() {
-        return ResponseEntity.ok(customerService.findCustomerPurchaseStatsDto());
+    public Mono<ResponseEntity<List<CustomerPurchaseStatsDTO>>> getCustomerPurchaseStatsDto() {
+        return customerService.findCustomerPurchaseStats().map(ResponseEntity::ok);
     }
 
 
@@ -293,17 +292,17 @@ public class CustomerController {
     }
 
     @GetMapping("/with-orders")
-    @Operation(summary = "Get customers with orders", description = "Return customers that have orders, as a lightweight projection")
+    @Operation(summary = "Get customers with orders", description = "Return customers that have orders; order data is read reactively from order-service")
     @ApiResponse(responseCode = "200", description = "Customers with orders fetched")
-    public ResponseEntity<List<CustomerBasicProjection>> getCustomersWithOrders() {
-        return ResponseEntity.ok(customerService.findCustomersWithOrders());
+    public Mono<ResponseEntity<List<CustomerDTO>>> getCustomersWithOrders() {
+        return customerService.findCustomersWithOrders().map(ResponseEntity::ok);
     }
 
     @GetMapping("/with-order-count")
-    @Operation(summary = "Get customers with order count", description = "Return each customer with their order count")
+    @Operation(summary = "Get customers with order count", description = "Return each customer with their order count; order data is read reactively from order-service")
     @ApiResponse(responseCode = "200", description = "Customer order counts fetched")
-    public ResponseEntity<List<CustomerOrderCountProjection>> getCustomersWithOrderCount() {
-        return ResponseEntity.ok(customerService.findCustomersWithOrderCount());
+    public Mono<ResponseEntity<List<CustomerOrderCountDTO>>> getCustomersWithOrderCount() {
+        return customerService.findCustomersWithOrderCount().map(ResponseEntity::ok);
     }
 
     @GetMapping("/summary")

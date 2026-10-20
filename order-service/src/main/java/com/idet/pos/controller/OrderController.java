@@ -1,6 +1,7 @@
 package com.idet.pos.controller;
 
 import com.idet.pos.service.OrderService;
+import com.idet.pos.dto.CustomerOrderTotalsDTO;
 import com.idet.pos.dto.OrderDTO;
 import com.idet.pos.dto.OrderSummaryDTO;
 import com.idet.pos.exception.InvalidRequestException;
@@ -102,6 +103,13 @@ public class OrderController {
     @ApiResponse(responseCode = "200", description = "Order summaries fetched")
     public ResponseEntity<List<OrderSummaryProjection>> getOrderSummaries() {
         return ResponseEntity.ok(orderService.findOrderSummaries());
+    }
+
+    @GetMapping("/internal/customer-totals")
+    @Operation(summary = "Order totals per customer (internal)", description = "Order count and amount spent per customer. Called by customer-service; not routed through the gateway")
+    @ApiResponse(responseCode = "200", description = "Customer order totals fetched")
+    public ResponseEntity<List<CustomerOrderTotalsDTO>> getCustomerOrderTotals() {
+        return ResponseEntity.ok(orderService.findCustomerOrderTotals());
     }
 
     @GetMapping("/summary-dto")

@@ -1,38 +1,36 @@
 package com.idet.pos.service;
 
+import com.idet.pos.client.CustomerClient;
+import com.idet.pos.client.CustomerResponse;
+import com.idet.pos.client.InventoryClient;
+import com.idet.pos.client.StockLine;
+import com.idet.pos.dto.CustomerOrderTotalsDTO;
 import com.idet.pos.dto.OrderDTO;
 import com.idet.pos.dto.OrderDetailDTO;
 import com.idet.pos.dto.OrderSummaryDTO;
-import com.idet.pos.entity.Customer;
-import com.idet.pos.entity.Inventory;
 import com.idet.pos.entity.Order;
 import com.idet.pos.entity.OrderDetail;
-import com.idet.pos.exception.InsufficientStockException;
 import com.idet.pos.exception.InvalidRequestException;
 import com.idet.pos.exception.ResourceNotFoundException;
 import com.idet.pos.projection.OrderSummary;
 import com.idet.pos.projection.OrderSummaryProjection;
-import com.idet.pos.repository.CustomerRepository;
-import com.idet.pos.repository.InventoryRepository;
-import com.idet.pos.repository.ItemRepository;
 import com.idet.pos.repository.OrderDetailRepository;
 import com.idet.pos.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Logger;
 
 /**
  * OrderService - Business Logic Layer
- * Handles all order-related operations with ACID transaction support.
- * Spring's @Transactional annotation ensures atomicity: all operations succeed or all rollback.
- * Hibernate manages the entire transaction lifecycle.
+ * Handles all order-related operations. Local reads and writes are transactional;
+ * customer and stock checks are remote calls to customer-service and item-service.
  */
 @Service
 @Transactional
@@ -47,27 +45,26 @@ public class OrderService {
     private OrderDetailRepository orderDetailRepository;
 
     @Autowired
-    private ItemRepository itemRepository;
+    private CustomerClient customerClient;
 
     @Autowired
-    private InventoryRepository inventoryRepository;
+    private InventoryClient inventoryClient;
 
     @Autowired
-    private CustomerRepository customerRepository;
+    private TransactionTemplate transactionTemplate;
 
     /**
-     * Place an order with full ACID transaction support.
-     * This method ensures:
-     * 1. Customer exists
-     * 2. All items are available and in stock
-     * 3. Order is saved
-     * 4. Order details are saved
-     * 5. Item stock is decremented
+     * Place an order across services.
+     * 1. The customer is checked in customer-service (Feign).
+     * 2. Stock is checked and reserved atomically in item-service (Feign).
+     * 3. The order and its details are saved in a local transaction.
      *
-     * If ANY step fails, the entire transaction is rolled back automatically.
+     * There is no shared transaction any more: if step 3 fails, the reserved stock is
+     * released again (compensation). Remote calls run outside the database transaction.
      * @param dto Order DTO containing order details
      * @return OrderDTO with generated order ID
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OrderDTO placeOrder(OrderDTO dto) {
         logger.info("Service: Attempting to place order for customer: " + dto.getCustomerId());
 
@@ -76,37 +73,30 @@ public class OrderService {
             throw new InvalidRequestException("Invalid order request");
         }
 
-        Customer customer = customerRepository.findById(dto.getCustomerId())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + dto.getCustomerId()));
-        logger.info("Service: Customer found: " + customer.getId());
-
-        Map<String, Integer> requestedQtyByItem = new HashMap<>();
+        List<StockLine> stockLines = new ArrayList<>();
         for (OrderDetailDTO detail : dto.getOrderDetails()) {
             if (!isValidOrderDetail(detail)) {
                 throw new InvalidRequestException("Invalid order detail for item: " + detail.getItemCode());
             }
-
-            itemRepository.findById(detail.getItemCode())
-                    .orElseThrow(() -> new ResourceNotFoundException("Item not found: " + detail.getItemCode()));
-
-            requestedQtyByItem.merge(detail.getItemCode(), detail.getQty(), Integer::sum);
+            stockLines.add(new StockLine(detail.getItemCode(), detail.getQty()));
         }
 
-        Map<String, Inventory> inventoryCache = new HashMap<>();
-        for (Map.Entry<String, Integer> requestedQty : requestedQtyByItem.entrySet()) {
-            String itemCode = requestedQty.getKey();
-            int totalRequestedQty = requestedQty.getValue();
+        CustomerResponse customer = customerClient.getCustomer(dto.getCustomerId());
+        logger.info("Service: Customer found: " + customer.id());
 
-            Inventory inventory = inventoryRepository.findByItemCodeForUpdate(itemCode)
-                    .orElseThrow(() -> new ResourceNotFoundException("Inventory not found for item: " + itemCode));
+        inventoryClient.reserve(stockLines);
+        logger.info("Service: All items validated and stock reserved");
 
-            if (inventory.getQty() < totalRequestedQty) {
-                throw new InsufficientStockException("Insufficient stock for item: " + itemCode);
-            }
-            inventoryCache.put(itemCode, inventory);
+        try {
+            return transactionTemplate.execute(status -> saveOrder(dto));
+        } catch (RuntimeException ex) {
+            logger.warning("Service: Saving order failed, releasing reserved stock: " + ex.getMessage());
+            releaseReservedStock(stockLines);
+            throw ex;
         }
-        logger.info("Service: All items validated and in stock");
+    }
 
+    private OrderDTO saveOrder(OrderDTO dto) {
         Order orderEntity = new Order(
                 generateOrderId(),
                 dto.getDate() != null ? dto.getDate() : LocalDate.now(),
@@ -124,11 +114,6 @@ public class OrderService {
                     savedOrder.getOrderId(), detail.getItemCode(), detail.getQty(), detail.getUnitPrice());
             orderDetailRepository.save(detailEntity);
             logger.info("Service: Order detail saved: " + savedOrder.getOrderId() + " - " + detail.getItemCode());
-
-            Inventory inventory = inventoryCache.get(detail.getItemCode());
-            inventory.setQty(inventory.getQty() - detail.getQty());
-            inventoryRepository.save(inventory);
-            logger.info("Service: Item stock updated: " + detail.getItemCode());
         }
 
         logger.info("Service: Order transaction committed successfully for order: " + savedOrder.getOrderId());
@@ -138,6 +123,15 @@ public class OrderService {
             detailDTOs.add(new OrderDetailDTO(d.getOrderId(), d.getItemCode(), d.getQty(), d.getUnitPrice()));
         }
         return new OrderDTO(savedOrder.getOrderId(), savedOrder.getDate(), savedOrder.getCustomerId(), detailDTOs);
+    }
+
+    private void releaseReservedStock(List<StockLine> stockLines) {
+        try {
+            inventoryClient.release(stockLines);
+            logger.info("Service: Reserved stock released");
+        } catch (RuntimeException releaseEx) {
+            logger.severe("Service: Failed to release reserved stock " + stockLines + ": " + releaseEx.getMessage());
+        }
     }
 
     /**
@@ -229,6 +223,17 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderSummary> findOrderSummariesWithConstructor() {
         return orderRepository.findOrderSummariesWithConstructor();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerOrderTotalsDTO> findCustomerOrderTotals() {
+        List<CustomerOrderTotalsDTO> totals = new ArrayList<>();
+        orderRepository.findCustomerOrderTotals().forEach(row -> totals.add(new CustomerOrderTotalsDTO(
+                row.getCustomerId(),
+                row.getOrderCount() != null ? row.getOrderCount() : 0L,
+                row.getTotalAmount() != null ? row.getTotalAmount() : 0.0
+        )));
+        return totals;
     }
 
     @Transactional(readOnly = true)
