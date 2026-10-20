@@ -1,6 +1,7 @@
 package com.idet.pos.entity;
 
 import jakarta.persistence.*;
+import org.springframework.data.domain.Persistable;
 
 /**
  * Inventory Entity
@@ -30,7 +31,7 @@ import jakarta.persistence.*;
                 resultClass = Inventory.class
         )
 })
-public class Inventory {
+public class Inventory implements Persistable<String> {
 
     @Id
     @Column(name = "item_code", length = 10)
@@ -43,6 +44,10 @@ public class Inventory {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "item_code")
     private Item item;
+
+    // New rows must be persisted, not merged: merging an entity whose id comes from @MapsId fails in Hibernate 7.
+    @Transient
+    private boolean isNew = true;
 
     public Inventory() {}
 
@@ -60,5 +65,15 @@ public class Inventory {
 
     public Item getItem() { return item; }
     public void setItem(Item item) { this.item = item; }
+
+    @Override
+    public String getId() { return itemCode; }
+
+    @Override
+    public boolean isNew() { return isNew; }
+
+    @PostLoad
+    @PostPersist
+    void markNotNew() { this.isNew = false; }
 }
 

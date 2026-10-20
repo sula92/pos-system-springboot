@@ -62,6 +62,14 @@ Start the applications in this order, each in its own terminal:
 2. The three business services, in any order.
 3. `api-gateway` last. Give the services a few seconds to appear in Eureka before sending requests.
 
+Right after start-up the gateway can answer **503** for up to about a minute. The gateway only sees a
+service after Eureka registration, a registry refresh (30 s by default) and a load-balancer cache refresh
+(35 s by default). Requests sent before that count as failures and can open that route's circuit breaker
+for 10 seconds. Wait until every service is listed at http://localhost:8761, then retry.
+
+`scripts/e2e-smoke.sh` starts everything from the built jars and checks routing, Feign order placement,
+the WebClient stats call and the circuit-breaker fallbacks. CI runs it in the `e2e-smoke` job.
+
 Set `EUREKA_URL` if Eureka is not at `http://localhost:8761/eureka/`.
 
 ## Routes through the gateway
