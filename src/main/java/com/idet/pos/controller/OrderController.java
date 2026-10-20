@@ -13,29 +13,36 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
+import java.util.Set;
 import java.util.logging.Logger;
 
 @RestController
 @RequestMapping("/order")
 @CrossOrigin(origins = "http://localhost:5173")
 @Tag(name = "Order", description = "Order placement, retrieval, and order reporting APIs")
+@Validated
 public class OrderController {
 
     private static final Logger logger = Logger.getLogger(OrderController.class.getName());
-    private static final Pattern ORDER_ID_PATTERN = Pattern.compile("^O\\d{3}$");
-
     @Autowired
     private OrderService orderService;
+
+    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @GetMapping
     @Operation(summary = "Get orders", description = "Fetch all orders or one order by id")
@@ -43,12 +50,14 @@ public class OrderController {
             @ApiResponse(responseCode = "200", description = "Orders fetched successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid order id format")
     })
-    public ResponseEntity<?> getOrders(@Parameter(example = "O001") @RequestParam(name = "id", required = false) String id) {
+    public ResponseEntity<?> getOrders(
+            @Parameter(example = "O001")
+            @RequestParam(name = "id", required = false)
+            @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
+            String id
+    ) {
         if (id != null) {
-            if (!ORDER_ID_PATTERN.matcher(id).matches()) {
-                logger.warning("Invalid order ID format: " + id);
-                throw new InvalidRequestException("Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)");
-            }
+            validateOrderId(id);
             return ResponseEntity.ok(orderService.findOrder(id));
         }
 
@@ -106,7 +115,12 @@ public class OrderController {
     @GetMapping("/details-graph")
     @Operation(summary = "Order by details graph", description = "Fetch a single order by id using entity graph")
     @ApiResponse(responseCode = "200", description = "Order fetched")
-    public ResponseEntity<OrderDTO> getOrderByDetailsGraph(@Parameter(example = "O001") @RequestParam("id") String id) {
+    public ResponseEntity<OrderDTO> getOrderByDetailsGraph(
+            @Parameter(example = "O001")
+            @RequestParam("id")
+            @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
+            String id
+    ) {
         validateOrderId(id);
         return ResponseEntity.ok(orderService.findOrderByDetailsGraph(id));
     }
@@ -121,7 +135,12 @@ public class OrderController {
     @GetMapping("/native")
     @Operation(summary = "Order by native SQL", description = "Fetch a single order by id using native SQL")
     @ApiResponse(responseCode = "200", description = "Order fetched")
-    public ResponseEntity<OrderDTO> getOrderByNative(@Parameter(example = "O001") @RequestParam("id") String id) {
+    public ResponseEntity<OrderDTO> getOrderByNative(
+            @Parameter(example = "O001")
+            @RequestParam("id")
+            @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
+            String id
+    ) {
         validateOrderId(id);
         return ResponseEntity.ok(orderService.findOrderByIdNative(id));
     }
@@ -136,10 +155,13 @@ public class OrderController {
     @GetMapping("/count-by-customer-native")
     @Operation(summary = "Count orders by customer", description = "Get native SQL order count for a customer id")
     @ApiResponse(responseCode = "200", description = "Order count fetched")
-    public ResponseEntity<Map<String, Object>> countByCustomerNative(@Parameter(example = "C001") @RequestParam("customerId") String customerId) {
-        if (customerId == null || customerId.trim().isEmpty()) {
-            throw new InvalidRequestException("customerId is required");
-        }
+    public ResponseEntity<Map<String, Object>> countByCustomerNative(
+            @Parameter(example = "C001")
+            @RequestParam("customerId")
+            @NotBlank(message = "customerId is required")
+            String customerId
+    ) {
+        validateCustomerIdRequired(customerId);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("customerId", customerId);
         response.put("orderCount", orderService.countOrdersByCustomerIdNative(customerId));
@@ -149,17 +171,25 @@ public class OrderController {
     @GetMapping("/by-customer")
     @Operation(summary = "Get orders by customer", description = "Fetch orders for a given customer id")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getOrdersByCustomer(@Parameter(example = "C001") @RequestParam("customerId") String customerId) {
-        if (customerId == null || customerId.trim().isEmpty()) {
-            throw new InvalidRequestException("customerId is required");
-        }
+    public ResponseEntity<List<OrderDTO>> getOrdersByCustomer(
+            @Parameter(example = "C001")
+            @RequestParam("customerId")
+            @NotBlank(message = "customerId is required")
+            String customerId
+    ) {
+        validateCustomerIdRequired(customerId);
         return ResponseEntity.ok(orderService.findOrdersByCustomerId(customerId));
     }
 
     @GetMapping("/by-id-with-details")
     @Operation(summary = "Order by id with details", description = "Fetch orders by id with details via JPQL query")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getOrdersByIdWithDetails(@Parameter(example = "O001") @RequestParam("id") String id) {
+    public ResponseEntity<List<OrderDTO>> getOrdersByIdWithDetails(
+            @Parameter(example = "O001")
+            @RequestParam("id")
+            @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
+            String id
+    ) {
         validateOrderId(id);
         return ResponseEntity.ok(orderService.findOrdersByIdWithDetails(id));
     }
@@ -167,7 +197,12 @@ public class OrderController {
     @GetMapping("/by-id-with-details-graph2")
     @Operation(summary = "Order by id with details graph 2", description = "Fetch orders by id with alternate details graph query")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getOrdersByIdWithDetailsGraph2(@Parameter(example = "O001") @RequestParam("id") String id) {
+    public ResponseEntity<List<OrderDTO>> getOrdersByIdWithDetailsGraph2(
+            @Parameter(example = "O001")
+            @RequestParam("id")
+            @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
+            String id
+    ) {
         validateOrderId(id);
         return ResponseEntity.ok(orderService.findOrdersByIdWithDetailsGraph2(id));
     }
@@ -196,17 +231,38 @@ public class OrderController {
     @GetMapping("/by-id-with-customer")
     @Operation(summary = "Order by id with customer", description = "Fetch orders by id with customer query variant")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getByIdWithCustomer(@Parameter(example = "O001") @RequestParam("id") String id) {
+    public ResponseEntity<List<OrderDTO>> getByIdWithCustomer(
+            @Parameter(example = "O001")
+            @RequestParam("id")
+            @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
+            String id
+    ) {
         validateOrderId(id);
         return ResponseEntity.ok(orderService.findOrdersByIdWithCustomer(id));
     }
 
     private void validateOrderId(String id) {
-        if (id == null || !ORDER_ID_PATTERN.matcher(id).matches()) {
-            logger.warning("Invalid order ID format: " + id);
-            throw new InvalidRequestException("Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)");
+        Set<ConstraintViolation<OrderIdRequest>> violations = validator.validateValue(OrderIdRequest.class, "id", id);
+        if (!violations.isEmpty()) {
+            throw new InvalidRequestException(violations.iterator().next().getMessage());
         }
     }
 
+    private void validateCustomerIdRequired(String customerId) {
+        Set<ConstraintViolation<CustomerIdRequest>> violations = validator.validateValue(CustomerIdRequest.class, "customerId", customerId);
+        if (!violations.isEmpty()) {
+            throw new InvalidRequestException(violations.iterator().next().getMessage());
+        }
+    }
+
+    private static class OrderIdRequest {
+        @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
+        private String id;
+    }
+
+    private static class CustomerIdRequest {
+        @NotBlank(message = "customerId is required")
+        private String customerId;
+    }
 
 }

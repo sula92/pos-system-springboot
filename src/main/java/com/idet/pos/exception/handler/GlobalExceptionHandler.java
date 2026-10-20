@@ -3,12 +3,15 @@ package com.idet.pos.exception.handler;
 import com.idet.pos.exception.InsufficientStockException;
 import com.idet.pos.exception.InvalidRequestException;
 import com.idet.pos.exception.ResourceNotFoundException;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -42,11 +45,37 @@ public class GlobalExceptionHandler {
             validationErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
 
+        return buildValidationResponse("Validation failed", validationErrors);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleConstraintViolation(ConstraintViolationException ex) {
+        Map<String, String> validationErrors = new LinkedHashMap<>();
+        for (ConstraintViolation<?> violation : ex.getConstraintViolations()) {
+            String path = violation.getPropertyPath() != null ? violation.getPropertyPath().toString() : "parameter";
+            int lastDot = path.lastIndexOf('.');
+            String field = lastDot >= 0 ? path.substring(lastDot + 1) : path;
+            validationErrors.put(field, violation.getMessage());
+        }
+
+        return buildValidationResponse(validationErrors.values().stream().findFirst().orElse("Validation failed"), validationErrors);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
+        Map<String, String> validationErrors = new LinkedHashMap<>();
+        ex.getAllErrors().forEach(error -> validationErrors.put("parameter", error.getDefaultMessage()));
+
+        return buildValidationResponse(validationErrors.values().stream().findFirst().orElse("Validation failed"), validationErrors);
+    }
+
+    private ResponseEntity<Map<String, Object>> buildValidationResponse(String message, Map<String, String> validationErrors) {
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("timestamp", LocalDateTime.now().toString());
         response.put("status", HttpStatus.BAD_REQUEST.value());
         response.put("error", HttpStatus.BAD_REQUEST.getReasonPhrase());
-        response.put("message", "Validation failed");
+        response.put("message", message);
         response.put("validationErrors", validationErrors);
         return ResponseEntity.badRequest().body(response);
     }

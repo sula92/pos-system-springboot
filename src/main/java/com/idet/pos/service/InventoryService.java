@@ -90,7 +90,6 @@ public class InventoryService {
     }
 
     public InventoryDTO createInventory(InventoryDTO dto) {
-        validate(dto);
         if (inventoryRepository.existsById(dto.getItemCode())) {
             throw new InvalidRequestException("Inventory already exists for item: " + dto.getItemCode());
         }
@@ -104,7 +103,6 @@ public class InventoryService {
     }
 
     public InventoryDTO updateInventory(InventoryDTO dto) {
-        validate(dto);
         Inventory inventory = inventoryRepository.findById(dto.getItemCode())
                 .orElseThrow(() -> new ResourceNotFoundException("Inventory not found for item: " + dto.getItemCode()));
 
@@ -114,14 +112,6 @@ public class InventoryService {
         return toDTO(updated);
     }
 
-    private void validate(InventoryDTO dto) {
-        if (dto == null || dto.getItemCode() == null || dto.getItemCode().isEmpty()) {
-            throw new InvalidRequestException("Item code is required for inventory operations");
-        }
-        if (dto.getQty() < 0) {
-            throw new InvalidRequestException("Inventory quantity cannot be negative");
-        }
-    }
 
     private InventoryDTO toDTO(Inventory inventory) {
         return new InventoryDTO(inventory.getItemCode(), inventory.getQty());

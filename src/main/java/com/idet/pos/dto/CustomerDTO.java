@@ -1,15 +1,15 @@
 package com.idet.pos.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.idet.pos.validation.ValidCustomerId;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class CustomerDTO {
     @Schema(description = "Customer ID", example = "C001", requiredMode = Schema.RequiredMode.REQUIRED, pattern = "^C\\d{3}$")
     @NotBlank(message = "Customer ID is required")
-    @Pattern(regexp = "^C\\d{3}$", message = "Customer ID must match C followed by 3 digits (e.g. C001)")
+    @ValidCustomerId
     private String id;
 
     @Schema(description = "Customer name", example = "Nimal Perera", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)

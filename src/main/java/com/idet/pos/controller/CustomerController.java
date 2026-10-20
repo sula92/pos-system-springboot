@@ -8,6 +8,7 @@ import com.idet.pos.projection.CustomerBasicProjection;
 import com.idet.pos.projection.CustomerOrderCountProjection;
 import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.projection.CustomerSummary;
+import com.idet.pos.validation.ValidCustomerId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -15,28 +16,34 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
+import java.util.Set;
 import java.util.logging.Logger;
 
 @RestController
 @RequestMapping("/customer")
 @CrossOrigin(origins = "http://localhost:5173")
 @Tag(name = "Customer", description = "Customer management and customer analytics APIs")
+@Validated
 public class CustomerController {
 
     private static final Logger logger = Logger.getLogger(CustomerController.class.getName());
-    private static final Pattern ID_PATTERN = Pattern.compile("^C\\d{3}$");
-
     @Autowired
     private CustomerService customerService;
+
+    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @GetMapping
     @Operation(summary = "Get customers", description = "Fetch all customers or a single customer by id")
@@ -44,12 +51,14 @@ public class CustomerController {
             @ApiResponse(responseCode = "200", description = "Customers fetched successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid customer id format")
     })
-    public ResponseEntity<?> getCustomers(@Parameter(example = "C001") @RequestParam(name = "id", required = false) String id) {
+    public ResponseEntity<?> getCustomers(
+            @Parameter(example = "C001")
+            @RequestParam(name = "id", required = false)
+            @ValidCustomerId(message = "Invalid customer ID format. Expected format: C followed by 3 digits (e.g. C001)")
+            String id
+    ) {
         if (id != null) {
-            if (!ID_PATTERN.matcher(id).matches()) {
-                logger.warning("Invalid customer ID format: " + id);
-                throw new InvalidRequestException("Invalid customer ID format. Expected format: C followed by 3 digits (e.g. C001)");
-            }
+            validateCustomerId(id);
             return ResponseEntity.ok(customerService.findCustomer(id));
         }
 
@@ -102,10 +111,6 @@ public class CustomerController {
     public ResponseEntity<?> updateCustomer(@Valid @RequestBody CustomerDTO dto) {
         String id = dto.getId();
         logger.info("Attempting to update customer: " + id);
-        if (id == null || !ID_PATTERN.matcher(id).matches()) {
-            logger.warning("Invalid or missing customer ID for update: " + id);
-            throw new InvalidRequestException("Invalid or missing customer ID. Expected format: C followed by 3 digits (e.g. C001)");
-        }
         CustomerDTO updated = customerService.updateCustomer(dto);
         logger.info("Customer updated successfully: " + id);
         return ResponseEntity.ok(updated);
@@ -117,12 +122,14 @@ public class CustomerController {
             @ApiResponse(responseCode = "200", description = "Customer deleted successfully"),
             @ApiResponse(responseCode = "404", description = "Customer not found")
     })
-    public ResponseEntity<?> deleteCustomer(@Parameter(example = "C001") @RequestParam("id") String id) {
+    public ResponseEntity<?> deleteCustomer(
+            @Parameter(example = "C001")
+            @RequestParam("id")
+            @ValidCustomerId(message = "Invalid customer ID format. Expected format: C followed by 3 digits (e.g. C001)")
+            String id
+    ) {
         logger.info("Attempting to delete customer: " + id);
-        if (id == null || !ID_PATTERN.matcher(id).matches()) {
-            logger.warning("Invalid customer ID format for delete: " + id);
-            throw new InvalidRequestException("Invalid customer ID format. Expected format: C followed by 3 digits (e.g. C001)");
-        }
+        validateCustomerId(id);
         customerService.deleteCustomer(id);
         logger.info("Customer deleted successfully: " + id);
         return ResponseEntity.ok(successResponse("Customer deleted successfully"));
@@ -146,20 +153,24 @@ public class CustomerController {
     @GetMapping("/search")
     @Operation(summary = "Search customers by name", description = "Case-insensitive name search using derived query")
     @ApiResponse(responseCode = "200", description = "Matching customers fetched")
-    public ResponseEntity<List<CustomerDTO>> searchCustomers(@Parameter(example = "nim") @RequestParam("name") String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new InvalidRequestException("Name is required for customer search");
-        }
+    public ResponseEntity<List<CustomerDTO>> searchCustomers(
+            @Parameter(example = "nim")
+            @RequestParam("name")
+            @NotBlank(message = "Name is required for customer search")
+            String name
+    ) {
         return ResponseEntity.ok(customerService.searchCustomersByName(name));
     }
 
     @GetMapping("/search-jpql")
     @Operation(summary = "Search customers by name (JPQL)", description = "Name search using a custom JPQL query")
     @ApiResponse(responseCode = "200", description = "Matching customers fetched")
-    public ResponseEntity<List<CustomerDTO>> searchCustomersWithJpql(@Parameter(example = "nim") @RequestParam("name") String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new InvalidRequestException("Name is required for JPQL customer search");
-        }
+    public ResponseEntity<List<CustomerDTO>> searchCustomersWithJpql(
+            @Parameter(example = "nim")
+            @RequestParam("name")
+            @NotBlank(message = "Name is required for JPQL customer search")
+            String name
+    ) {
         return ResponseEntity.ok(customerService.searchCustomersByNameJpql(name));
     }
 
@@ -169,80 +180,96 @@ public class CustomerController {
             @ApiResponse(responseCode = "200", description = "Customer fetched successfully"),
             @ApiResponse(responseCode = "404", description = "Customer not found")
     })
-    public ResponseEntity<CustomerDTO> getCustomerByEmail(@Parameter(example = "nimal@example.com") @RequestParam("email") String email) {
-        if (email == null || email.trim().isEmpty()) {
-            throw new InvalidRequestException("Email is required");
-        }
+    public ResponseEntity<CustomerDTO> getCustomerByEmail(
+            @Parameter(example = "nimal@example.com")
+            @RequestParam("email")
+            @NotBlank(message = "Email is required")
+            String email
+    ) {
         return ResponseEntity.ok(customerService.findCustomerByEmail(email));
     }
 
     @GetMapping("/by-name-exact")
     @Operation(summary = "Get customers by exact name", description = "Find customers with an exact name match")
     @ApiResponse(responseCode = "200", description = "Customers fetched successfully")
-    public ResponseEntity<List<CustomerDTO>> getCustomersByExactName(@Parameter(example = "Nimal Perera") @RequestParam("name") String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new InvalidRequestException("Name is required");
-        }
+    public ResponseEntity<List<CustomerDTO>> getCustomersByExactName(
+            @Parameter(example = "Nimal Perera")
+            @RequestParam("name")
+            @NotBlank(message = "Name is required")
+            String name
+    ) {
         return ResponseEntity.ok(customerService.findCustomersByExactName(name));
     }
 
     @GetMapping("/by-email-exact")
     @Operation(summary = "Get customers by exact email", description = "Find customers with an exact email match")
     @ApiResponse(responseCode = "200", description = "Customers fetched successfully")
-    public ResponseEntity<List<CustomerDTO>> getCustomersByExactEmail(@Parameter(example = "nimal@example.com") @RequestParam("email") String email) {
-        if (email == null || email.trim().isEmpty()) {
-            throw new InvalidRequestException("Email is required");
-        }
+    public ResponseEntity<List<CustomerDTO>> getCustomersByExactEmail(
+            @Parameter(example = "nimal@example.com")
+            @RequestParam("email")
+            @NotBlank(message = "Email is required")
+            String email
+    ) {
         return ResponseEntity.ok(customerService.findCustomersByExactEmail(email));
     }
 
     @GetMapping("/by-address")
     @Operation(summary = "Get customers by address", description = "Find customers by address pattern")
     @ApiResponse(responseCode = "200", description = "Customers fetched successfully")
-    public ResponseEntity<List<CustomerDTO>> getCustomersByAddress(@Parameter(example = "Colombo") @RequestParam("address") String address) {
-        if (address == null || address.trim().isEmpty()) {
-            throw new InvalidRequestException("Address is required");
-        }
+    public ResponseEntity<List<CustomerDTO>> getCustomersByAddress(
+            @Parameter(example = "Colombo")
+            @RequestParam("address")
+            @NotBlank(message = "Address is required")
+            String address
+    ) {
         return ResponseEntity.ok(customerService.findCustomersByAddress(address));
     }
 
     @GetMapping("/search-by-email")
     @Operation(summary = "Search customers by email", description = "Search customers by partial email text")
     @ApiResponse(responseCode = "200", description = "Matching customers fetched")
-    public ResponseEntity<List<CustomerDTO>> searchCustomersByEmail(@Parameter(example = "example.com") @RequestParam("email") String email) {
-        if (email == null || email.trim().isEmpty()) {
-            throw new InvalidRequestException("Email is required for search");
-        }
+    public ResponseEntity<List<CustomerDTO>> searchCustomersByEmail(
+            @Parameter(example = "example.com")
+            @RequestParam("email")
+            @NotBlank(message = "Email is required for search")
+            String email
+    ) {
         return ResponseEntity.ok(customerService.searchCustomersByEmail(email));
     }
 
     @GetMapping("/search-by-address")
     @Operation(summary = "Search customers by address", description = "Search customers by partial address text")
     @ApiResponse(responseCode = "200", description = "Matching customers fetched")
-    public ResponseEntity<List<CustomerDTO>> searchCustomersByAddress(@Parameter(example = "Road") @RequestParam("address") String address) {
-        if (address == null || address.trim().isEmpty()) {
-            throw new InvalidRequestException("Address is required for search");
-        }
+    public ResponseEntity<List<CustomerDTO>> searchCustomersByAddress(
+            @Parameter(example = "Road")
+            @RequestParam("address")
+            @NotBlank(message = "Address is required for search")
+            String address
+    ) {
         return ResponseEntity.ok(customerService.searchCustomersByAddress(address));
     }
 
     @GetMapping("/search-all-fields")
     @Operation(summary = "Search customers by multiple fields", description = "Search by name, email, or address using one keyword")
     @ApiResponse(responseCode = "200", description = "Matching customers fetched")
-    public ResponseEntity<List<CustomerDTO>> searchCustomersByNameEmailAddress(@Parameter(example = "C00") @RequestParam("keyword") String keyword) {
-        if (keyword == null || keyword.trim().isEmpty()) {
-            throw new InvalidRequestException("keyword is required for search");
-        }
+    public ResponseEntity<List<CustomerDTO>> searchCustomersByNameEmailAddress(
+            @Parameter(example = "C00")
+            @RequestParam("keyword")
+            @NotBlank(message = "keyword is required for search")
+            String keyword
+    ) {
         return ResponseEntity.ok(customerService.searchCustomersByNameEmailAddress(keyword));
     }
 
     @GetMapping("/search-all-fields-with-id")
     @Operation(summary = "Search customers by multiple fields including id", description = "Search by id, name, email, or address using one keyword")
     @ApiResponse(responseCode = "200", description = "Matching customers fetched")
-    public ResponseEntity<List<CustomerDTO>> searchCustomersByNameEmailAddressId(@Parameter(example = "C00") @RequestParam("keyword") String keyword) {
-        if (keyword == null || keyword.trim().isEmpty()) {
-            throw new InvalidRequestException("keyword is required for search");
-        }
+    public ResponseEntity<List<CustomerDTO>> searchCustomersByNameEmailAddressId(
+            @Parameter(example = "C00")
+            @RequestParam("keyword")
+            @NotBlank(message = "keyword is required for search")
+            String keyword
+    ) {
         return ResponseEntity.ok(customerService.searchCustomersByNameEmailAddressId(keyword));
     }
 
@@ -256,10 +283,12 @@ public class CustomerController {
     @GetMapping("/native-by-name")
     @Operation(summary = "Get customers by name (native)", description = "Fetch customers by exact name using native SQL")
     @ApiResponse(responseCode = "200", description = "Customers fetched successfully")
-    public ResponseEntity<List<CustomerDTO>> getCustomersByNameNative(@Parameter(example = "Nimal Perera") @RequestParam("name") String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new InvalidRequestException("Name is required");
-        }
+    public ResponseEntity<List<CustomerDTO>> getCustomersByNameNative(
+            @Parameter(example = "Nimal Perera")
+            @RequestParam("name")
+            @NotBlank(message = "Name is required")
+            String name
+    ) {
         return ResponseEntity.ok(customerService.findCustomersByNameNative(name));
     }
 
@@ -289,4 +318,17 @@ public class CustomerController {
         response.put("message", message);
         return response;
     }
+
+    private void validateCustomerId(String id) {
+        Set<ConstraintViolation<CustomerIdRequest>> violations = validator.validateValue(CustomerIdRequest.class, "id", id);
+        if (!violations.isEmpty()) {
+            throw new InvalidRequestException(violations.iterator().next().getMessage());
+        }
+    }
+
+    private static class CustomerIdRequest {
+        @ValidCustomerId(message = "Invalid customer ID format. Expected format: C followed by 3 digits (e.g. C001)")
+        private String id;
+    }
+
 }
