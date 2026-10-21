@@ -6,6 +6,8 @@ import com.idet.pos.projection.CustomerBasicProjection;
 import com.idet.pos.projection.CustomerOrderCountProjection;
 import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.projection.CustomerSummary;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,7 +27,7 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
     // Additional custom queries can be added here using @Query annotations if needed
 
     // Derived query examples (no @Query annotation required).
-    List<Customer> findByNameContainingIgnoreCase(String namePart);
+    Page<Customer> findByNameContainingIgnoreCase(String namePart, Pageable pageable);
 
     Optional<Customer> findByEmailIgnoreCase(String email);
 
@@ -36,50 +38,59 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
     List<Customer> findByEmail(@Param("email") String email);
 
     @Query("SELECT c FROM Customer c WHERE c.address LIKE %:address%")
-    List<Customer> findByAddress(@Param("address") String address);
+    Page<Customer> findByAddress(@Param("address") String address, Pageable pageable);
 
     @Query("SELECT c FROM Customer c WHERE c.name LIKE %:name%")
-    List<Customer> searchByName(@Param("name") String name);
+    Page<Customer> searchByName(@Param("name") String name, Pageable pageable);
 
     @Query("SELECT c FROM Customer c WHERE c.email LIKE %:email%")
-    List<Customer> searchByEmail(@Param("email") String email);
+    Page<Customer> searchByEmail(@Param("email") String email, Pageable pageable);
 
     @Query("SELECT c FROM Customer c WHERE c.address LIKE %:address%")
-    List<Customer> searchByAddress(@Param("address") String address);
+    Page<Customer> searchByAddress(@Param("address") String address, Pageable pageable);
 
     @Query("SELECT c FROM Customer c WHERE c.name LIKE %:name% OR c.email LIKE %:email% OR c.address LIKE %:address%")
-    List<Customer> searchByNameOrEmailOrAddress(
-            @Param("name") String name,
-            @Param("email") String email,
-            @Param("address") String address
-    );
-
-    @Query("SELECT c FROM Customer c WHERE c.name LIKE %:name% OR c.email LIKE %:email% OR c.address LIKE %:address% OR c.id LIKE %:id%")
-    List<Customer> searchByNameOrEmailOrAddressOrId(
+    Page<Customer> searchByNameOrEmailOrAddress(
             @Param("name") String name,
             @Param("email") String email,
             @Param("address") String address,
-            @Param("id") String id
+            Pageable pageable
     );
 
-    @Query(value = "SELECT * FROM customers", nativeQuery = true)
-    List<Customer> findAllNative();
+    @Query("SELECT c FROM Customer c WHERE c.name LIKE %:name% OR c.email LIKE %:email% OR c.address LIKE %:address% OR c.id LIKE %:id%")
+    Page<Customer> searchByNameOrEmailOrAddressOrId(
+            @Param("name") String name,
+            @Param("email") String email,
+            @Param("address") String address,
+            @Param("id") String id,
+            Pageable pageable
+    );
+
+    @Query(value = "SELECT * FROM customers ORDER BY id",
+            countQuery = "SELECT COUNT(*) FROM customers",
+            nativeQuery = true)
+    Page<Customer> findAllNative(Pageable pageable);
 
     @Query(value = "SELECT * FROM customers WHERE name = :name", nativeQuery = true)
     List<Customer> findByNameNative(@Param("name") String name);
 
-    @Query("SELECT c.id AS id, c.name AS name, c.email AS email, c.address AS address " +
+    @Query(value = "SELECT c.id AS id, c.name AS name, c.email AS email, c.address AS address " +
             "FROM Customer c JOIN Order o ON o.customerId = c.id " +
-            "GROUP BY c.id, c.name, c.email, c.address")
-    List<CustomerBasicProjection> findCustomersWithOrders();
+            "GROUP BY c.id, c.name, c.email, c.address " +
+            "ORDER BY c.id",
+            countQuery = "SELECT COUNT(DISTINCT c.id) FROM Customer c JOIN Order o ON o.customerId = c.id")
+    Page<CustomerBasicProjection> findCustomersWithOrders(Pageable pageable);
 
-    @Query("SELECT c.id AS id, c.name AS name, COUNT(o.orderId) AS orderCount " +
+    @Query(value = "SELECT c.id AS id, c.name AS name, COUNT(o.orderId) AS orderCount " +
             "FROM Customer c LEFT JOIN Order o ON o.customerId = c.id " +
-            "GROUP BY c.id, c.name")
-    List<CustomerOrderCountProjection> findCustomersWithOrderCount();
+            "GROUP BY c.id, c.name " +
+            "ORDER BY c.id",
+            countQuery = "SELECT COUNT(c) FROM Customer c")
+    Page<CustomerOrderCountProjection> findCustomersWithOrderCount(Pageable pageable);
 
-    @Query("SELECT new com.idet.pos.projection.CustomerSummary(c.id, c.name, c.email) FROM Customer c")
-    List<CustomerSummary> findCustomerSummaries();
+    @Query(value = "SELECT new com.idet.pos.projection.CustomerSummary(c.id, c.name, c.email) FROM Customer c ORDER BY c.id",
+            countQuery = "SELECT COUNT(c) FROM Customer c")
+    Page<CustomerSummary> findCustomerSummaries(Pageable pageable);
 
     @Query(value = "SELECT c.id AS customerId, " +
             "c.name AS customerName, " +
@@ -90,19 +101,19 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
             "LEFT JOIN orders o ON o.customer_id = c.id " +
             "LEFT JOIN order_details od ON od.order_id = o.order_id " +
             "GROUP BY c.id, c.name, c.email " +
-            "ORDER BY c.name", nativeQuery = true)
-    List<CustomerPurchaseStatsProjection> findCustomerPurchaseStats();
+            "ORDER BY c.name, c.id",
+            countQuery = "SELECT COUNT(*) FROM customers",
+            nativeQuery = true)
+    Page<CustomerPurchaseStatsProjection> findCustomerPurchaseStats(Pageable pageable);
 
-    default List<CustomerPurchaseStatsDTO> findCustomerPurchaseStatsDto() {
-        return findCustomerPurchaseStats()
-                .stream()
+    default Page<CustomerPurchaseStatsDTO> findCustomerPurchaseStatsDto(Pageable pageable) {
+        return findCustomerPurchaseStats(pageable)
                 .map(row -> new CustomerPurchaseStatsDTO(
                         row.getCustomerId(),
                         row.getCustomerName(),
                         row.getEmail(),
                         row.getTotalOrders() != null ? row.getTotalOrders() : 0L,
                         row.getTotalSpent() != null ? row.getTotalSpent() : 0.0
-                ))
-                .toList();
+                ));
     }
 }

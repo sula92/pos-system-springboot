@@ -1,0 +1,7 @@
+code,description,unitPrice,qty
+I901,Batch Rice 1kg,250.0,40
+I902,Batch Sugar 1kg,180.5,0
+I901,Duplicate Rice,260.0,5
+I903,Bad Price,not-a-number,3
+I904,Negative Stock,10.0,-1
+I905,Already Exists,6.0,9

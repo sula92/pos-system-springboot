@@ -9,12 +9,13 @@ import com.idet.pos.exception.ResourceNotFoundException;
 import com.idet.pos.projection.InventoryStockViewProjection;
 import com.idet.pos.repository.InventoryRepository;
 import com.idet.pos.repository.ItemRepository;
+import com.idet.pos.util.PageableUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.logging.Logger;
 
 @Service
@@ -37,50 +38,34 @@ public class InventoryService {
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryDTO> findAllInventories() {
-        List<InventoryDTO> dtos = new ArrayList<>();
-        for (Inventory inventory : inventoryRepository.findAllOrderByItemCode()) {
-            dtos.add(toDTO(inventory));
-        }
-        return dtos;
+    public Page<InventoryDTO> findAllInventories(Pageable pageable) {
+        return inventoryRepository.findAll(pageable).map(this::toDTO);
     }
 
 
     @Transactional(readOnly = true)
-    public List<InventoryStockViewProjection> findInventoryStockViews() {
-        return inventoryRepository.findInventoryStockViews();
+    public Page<InventoryStockViewProjection> findInventoryStockViews(Pageable pageable) {
+        return inventoryRepository.findInventoryStockViews(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryStockValueView> findInventoryStockValueViews() {
-        return inventoryRepository.findInventoryStockValueViews();
+    public Page<InventoryStockValueView> findInventoryStockValueViews(Pageable pageable) {
+        return inventoryRepository.findInventoryStockValueViews(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryDTO> findLowStock(int maxQty) {
-        List<InventoryDTO> dtos = new ArrayList<>();
-        for (Inventory inventory : inventoryRepository.findByQtyLessThanEqualOrderByQtyAsc(maxQty)) {
-            dtos.add(toDTO(inventory));
-        }
-        return dtos;
+    public Page<InventoryDTO> findLowStock(int maxQty, Pageable pageable) {
+        return inventoryRepository.findByQtyLessThanEqualOrderByQtyAsc(maxQty, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryDTO> findInStockAbove(int minQty) {
-        List<InventoryDTO> dtos = new ArrayList<>();
-        for (Inventory inventory : inventoryRepository.findByQtyGreaterThanOrderByQtyDesc(minQty)) {
-            dtos.add(toDTO(inventory));
-        }
-        return dtos;
+    public Page<InventoryDTO> findInStockAbove(int minQty, Pageable pageable) {
+        return inventoryRepository.findByQtyGreaterThanOrderByQtyDesc(minQty, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryDTO> findInStockNative() {
-        List<InventoryDTO> dtos = new ArrayList<>();
-        for (Inventory inventory : inventoryRepository.findInStockNative()) {
-            dtos.add(toDTO(inventory));
-        }
-        return dtos;
+    public Page<InventoryDTO> findInStockNative(Pageable pageable) {
+        return inventoryRepository.findInStockNative(PageableUtils.withoutSort(pageable)).map(this::toDTO);
     }
 
     public InventoryDTO findInventoryForUpdate(String itemCode) {

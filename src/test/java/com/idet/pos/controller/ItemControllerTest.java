@@ -10,12 +10,22 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -41,9 +51,13 @@ class ItemControllerTest {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
+        PageableHandlerMethodArgumentResolver pageableResolver = new PageableHandlerMethodArgumentResolver();
+        pageableResolver.setMaxPageSize(100);
+
         mockMvc = MockMvcBuilders.standaloneSetup(itemController)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
+                .setCustomArgumentResolvers(pageableResolver)
                 .build();
 
         objectMapper = new ObjectMapper();
@@ -99,5 +113,31 @@ class ItemControllerTest {
 
         verify(itemService).saveItem(any(ItemDTO.class));
     }
-}
 
+    @Test
+    void searchItems_returnsPagedModelWithDefaultSort() throws Exception {
+        when(itemService.searchItemsByDescription(eq("rice"), any(Pageable.class))).thenReturn(new PageImpl<>(
+                List.of(new ItemDTO("I001", "Rice 1kg", 250.0), new ItemDTO("I002", "Rice 5kg", 1150.0)),
+                PageRequest.of(0, 2), 7));
+
+        mockMvc.perform(get("/item/search").param("keyword", "rice").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[1].code").value("I002"))
+                .andExpect(jsonPath("$.page.totalElements").value(7))
+                .andExpect(jsonPath("$.page.totalPages").value(4));
+
+        verify(itemService).searchItemsByDescription("rice", PageRequest.of(0, 2, Sort.by("code")));
+    }
+
+    @Test
+    void getItems_withoutCode_sortsByRequestedProperty() throws Exception {
+        when(itemService.findAllItems(any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/item").param("sort", "unitPrice,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+
+        verify(itemService).findAllItems(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "unitPrice")));
+    }
+}

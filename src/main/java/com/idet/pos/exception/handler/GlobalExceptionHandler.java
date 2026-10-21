@@ -5,6 +5,7 @@ import com.idet.pos.exception.InvalidRequestException;
 import com.idet.pos.exception.ResourceNotFoundException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -31,6 +32,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({InvalidRequestException.class, IllegalArgumentException.class})
     public ResponseEntity<Map<String, Object>> handleBadRequest(RuntimeException ex) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ResponseEntity<Map<String, Object>> handleUnknownProperty(PropertyReferenceException ex) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Unsupported sort property: " + ex.getPropertyName());
     }
 
     @ExceptionHandler(InsufficientStockException.class)

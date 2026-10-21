@@ -19,7 +19,14 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import com.idet.pos.util.PageableUtils;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedModel;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.SortDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -39,13 +46,14 @@ import java.util.logging.Logger;
 public class OrderController {
 
     private static final Logger logger = Logger.getLogger(OrderController.class.getName());
+    private static final Set<String> SORTABLE_PROPERTIES = Set.of("orderId", "date", "customerId");
     @Autowired
     private OrderService orderService;
 
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @GetMapping
-    @Operation(summary = "Get orders", description = "Fetch all orders or one order by id")
+    @Operation(summary = "Get orders", description = "Fetch one page of orders, or one order by id")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Orders fetched successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid order id format")
@@ -54,16 +62,20 @@ public class OrderController {
             @Parameter(example = "O001")
             @RequestParam(name = "id", required = false)
             @Pattern(regexp = "^O\\d{3}$", message = "Invalid order ID format. Expected format: O followed by 3 digits (e.g. O001)")
-            String id
+            String id,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE)
+            @SortDefault.SortDefaults({
+                    @SortDefault(sort = "date", direction = Sort.Direction.DESC),
+                    @SortDefault(sort = "orderId")
+            }) Pageable pageable
     ) {
         if (id != null) {
             validateOrderId(id);
             return ResponseEntity.ok(orderService.findOrder(id));
         }
 
-        logger.info("Fetching all orders");
-        List<OrderDTO> all = orderService.findAllOrders();
-        return ResponseEntity.ok(all);
+        logger.info("Fetching orders page " + pageable);
+        return ResponseEntity.ok(new PagedModel<>(orderService.findAllOrders(sortable(pageable))));
     }
 
     @PostMapping
@@ -100,15 +112,19 @@ public class OrderController {
     @GetMapping("/summary")
     @Operation(summary = "Order summary projection", description = "Get aggregated order summaries using interface projection")
     @ApiResponse(responseCode = "200", description = "Order summaries fetched")
-    public ResponseEntity<List<OrderSummaryProjection>> getOrderSummaries() {
-        return ResponseEntity.ok(orderService.findOrderSummaries());
+    public ResponseEntity<PagedModel<OrderSummaryProjection>> getOrderSummaries(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(orderService.findOrderSummaries(pageable)));
     }
 
     @GetMapping("/summary-dto")
     @Operation(summary = "Order summary DTO", description = "Get aggregated order summaries as DTO objects")
     @ApiResponse(responseCode = "200", description = "Order summary DTOs fetched")
-    public ResponseEntity<List<OrderSummaryDTO>> getOrderSummariesDto() {
-        return ResponseEntity.ok(orderService.findOrderSummariesDto());
+    public ResponseEntity<PagedModel<OrderSummaryDTO>> getOrderSummariesDto(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(orderService.findOrderSummariesDto(pageable)));
     }
 
 
@@ -128,8 +144,14 @@ public class OrderController {
     @GetMapping("/all-details-graph")
     @Operation(summary = "All orders by details graph", description = "Fetch all orders using entity graph for details")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getAllOrdersByDetailsGraph() {
-        return ResponseEntity.ok(orderService.findAllOrdersByDetailsGraph());
+    public ResponseEntity<PagedModel<OrderDTO>> getAllOrdersByDetailsGraph(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE)
+            @SortDefault.SortDefaults({
+                    @SortDefault(sort = "date", direction = Sort.Direction.DESC),
+                    @SortDefault(sort = "orderId")
+            }) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(orderService.findAllOrdersByDetailsGraph(sortable(pageable))));
     }
 
     @GetMapping("/native")
@@ -148,8 +170,10 @@ public class OrderController {
     @GetMapping("/native-all")
     @Operation(summary = "All orders by native SQL", description = "Fetch all orders ordered by date using native SQL")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getAllOrdersNative() {
-        return ResponseEntity.ok(orderService.findAllOrdersNativeOrderByDateDesc());
+    public ResponseEntity<PagedModel<OrderDTO>> getAllOrdersNative(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(orderService.findAllOrdersNativeOrderByDateDesc(pageable)));
     }
 
     @GetMapping("/count-by-customer-native")
@@ -171,14 +195,19 @@ public class OrderController {
     @GetMapping("/by-customer")
     @Operation(summary = "Get orders by customer", description = "Fetch orders for a given customer id")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getOrdersByCustomer(
+    public ResponseEntity<PagedModel<OrderDTO>> getOrdersByCustomer(
             @Parameter(example = "C001")
             @RequestParam("customerId")
             @NotBlank(message = "customerId is required")
-            String customerId
+            String customerId,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE)
+            @SortDefault.SortDefaults({
+                    @SortDefault(sort = "date", direction = Sort.Direction.DESC),
+                    @SortDefault(sort = "orderId")
+            }) Pageable pageable
     ) {
         validateCustomerIdRequired(customerId);
-        return ResponseEntity.ok(orderService.findOrdersByCustomerId(customerId));
+        return ResponseEntity.ok(new PagedModel<>(orderService.findOrdersByCustomerId(customerId, sortable(pageable))));
     }
 
     @GetMapping("/by-id-with-details")
@@ -210,22 +239,36 @@ public class OrderController {
     @GetMapping("/summary-constructor")
     @Operation(summary = "Order summary constructor projection", description = "Get order summaries built by constructor projection")
     @ApiResponse(responseCode = "200", description = "Order summaries fetched")
-    public ResponseEntity<List<OrderSummary>> getOrderSummariesWithConstructor() {
-        return ResponseEntity.ok(orderService.findOrderSummariesWithConstructor());
+    public ResponseEntity<PagedModel<OrderSummary>> getOrderSummariesWithConstructor(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(orderService.findOrderSummariesWithConstructor(pageable)));
     }
 
     @GetMapping("/all-with-customer")
     @Operation(summary = "All orders with customer", description = "Fetch orders with customer data query variant")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getAllWithCustomer() {
-        return ResponseEntity.ok(orderService.findAllOrdersWithCustomer());
+    public ResponseEntity<PagedModel<OrderDTO>> getAllWithCustomer(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE)
+            @SortDefault.SortDefaults({
+                    @SortDefault(sort = "date", direction = Sort.Direction.DESC),
+                    @SortDefault(sort = "orderId")
+            }) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(orderService.findAllOrdersWithCustomer(sortable(pageable))));
     }
 
     @GetMapping("/all-with-customer-details")
     @Operation(summary = "All orders with customer and details", description = "Fetch orders with customer/details query variant")
     @ApiResponse(responseCode = "200", description = "Orders fetched")
-    public ResponseEntity<List<OrderDTO>> getAllWithCustomerAndDetails() {
-        return ResponseEntity.ok(orderService.findAllOrdersWithCustomerAndDetails());
+    public ResponseEntity<PagedModel<OrderDTO>> getAllWithCustomerAndDetails(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE)
+            @SortDefault.SortDefaults({
+                    @SortDefault(sort = "date", direction = Sort.Direction.DESC),
+                    @SortDefault(sort = "orderId")
+            }) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(orderService.findAllOrdersWithCustomerAndDetails(sortable(pageable))));
     }
 
     @GetMapping("/by-id-with-customer")
@@ -239,6 +282,10 @@ public class OrderController {
     ) {
         validateOrderId(id);
         return ResponseEntity.ok(orderService.findOrdersByIdWithCustomer(id));
+    }
+
+    private Pageable sortable(Pageable pageable) {
+        return PageableUtils.requireSortable(pageable, SORTABLE_PROPERTIES);
     }
 
     private void validateOrderId(String id) {
