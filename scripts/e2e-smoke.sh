@@ -100,6 +100,9 @@ for ((i = 0; i < 60; i += 3)); do
   sleep 3
 done
 expect "place order (Feign customer check + stock reserve)" 201 "$code"
+order_id=$(jq -r '.data.orderId' /tmp/e2e-body)
+[[ "$order_id" =~ ^O[0-9]{3}$ ]] || fail "order id '$order_id' does not match the O001 format"
+expect "fetch placed order by id ($order_id)" 200 "$(status GET "$GW/order?id=$order_id")"
 
 expect "read stock" 200 "$(status GET "$GW/inventory?code=I001")"
 qty=$(jq -r '.qty' /tmp/e2e-body)

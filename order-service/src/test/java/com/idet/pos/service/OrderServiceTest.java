@@ -15,6 +15,7 @@ import com.idet.pos.repository.OrderDetailRepository;
 import com.idet.pos.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -116,25 +117,27 @@ class OrderServiceTest {
                 List.of(new OrderDetailDTO(null, "I001", 2, 100.0))
         );
 
-        Order savedOrder = new Order("O2", LocalDate.of(2026, 10, 18), "C001");
+        Order savedOrder = new Order("O002", LocalDate.of(2026, 10, 18), "C001");
 
         when(customerClient.getCustomer("C001")).thenReturn(CUSTOMER);
         runTransactionCallbacksDirectly();
-        when(orderRepository.findAll()).thenReturn(List.of(new Order("O1", LocalDate.of(2026, 10, 17), "C001")));
+        when(orderRepository.findAll()).thenReturn(List.of(new Order("O001", LocalDate.of(2026, 10, 17), "C001")));
         when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
-        when(orderDetailRepository.findByOrderId("O2"))
-                .thenReturn(List.of(new OrderDetail("O2", "I001", 2, 100.0)));
+        when(orderDetailRepository.findByOrderId("O002"))
+                .thenReturn(List.of(new OrderDetail("O002", "I001", 2, 100.0)));
 
         OrderDTO result = orderService.placeOrder(request);
 
-        assertEquals("O2", result.getOrderId());
+        assertEquals("O002", result.getOrderId());
         assertEquals("C001", result.getCustomerId());
         assertEquals(1, result.getOrderDetails().size());
         assertEquals("I001", result.getOrderDetails().getFirst().getItemCode());
         assertEquals(2, result.getOrderDetails().getFirst().getQty());
 
         verify(inventoryClient).reserve(List.of(new StockLine("I001", 2)));
-        verify(orderRepository).save(any(Order.class));
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        assertEquals("O002", orderCaptor.getValue().getOrderId());
         verify(orderDetailRepository).save(any(OrderDetail.class));
         verify(inventoryClient, never()).release(anyList());
     }

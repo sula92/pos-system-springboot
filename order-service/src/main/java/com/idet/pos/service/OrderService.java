@@ -279,7 +279,7 @@ public class OrderService {
      */
     private String generateOrderId() {
         List<Order> allOrders = orderRepository.findAll();
-        return "O" + (allOrders.size() + 1);
+        return String.format("O%03d", allOrders.size() + 1);
     }
 
     private List<OrderDTO> toDTOList(List<Order> orders) {
