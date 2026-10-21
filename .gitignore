@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local Maven cache ###
+.m2-temp/
+e2e-logs/
