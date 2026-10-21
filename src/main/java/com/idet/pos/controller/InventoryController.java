@@ -14,7 +14,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
+import com.idet.pos.util.PageableUtils;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -23,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/inventory")
@@ -31,11 +37,13 @@ import java.util.Map;
 @Validated
 public class InventoryController {
 
+    private static final Set<String> SORTABLE_PROPERTIES = Set.of("itemCode", "qty");
+
     @Autowired
     private InventoryService inventoryService;
 
     @GetMapping
-    @Operation(summary = "Get inventory", description = "Fetch all inventory rows or a single row by item code")
+    @Operation(summary = "Get inventory", description = "Fetch one page of inventory rows, or a single row by item code")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Inventory data fetched"),
             @ApiResponse(responseCode = "400", description = "Invalid item code format")
@@ -44,14 +52,14 @@ public class InventoryController {
             @Parameter(example = "I001")
             @RequestParam(name = "code", required = false)
             @Pattern(regexp = "^I\\d{3}$", message = "Invalid item code format. Expected format: I followed by 3 digits (e.g. I001)")
-            String code
+            String code,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "itemCode") Pageable pageable
     ) {
         if (code != null) {
             return ResponseEntity.ok(inventoryService.findInventory(code));
         }
 
-        List<InventoryDTO> all = inventoryService.findAllInventories();
-        return ResponseEntity.ok(all);
+        return ResponseEntity.ok(new PagedModel<>(inventoryService.findAllInventories(sortable(pageable))));
     }
 
     @PostMapping
@@ -99,47 +107,55 @@ public class InventoryController {
     @GetMapping("/stock-view")
     @Operation(summary = "Inventory stock view", description = "Get inventory stock with item details using interface projection")
     @ApiResponse(responseCode = "200", description = "Inventory stock view fetched")
-    public ResponseEntity<List<InventoryStockViewProjection>> getInventoryStockView() {
-        return ResponseEntity.ok(inventoryService.findInventoryStockViews());
+    public ResponseEntity<PagedModel<InventoryStockViewProjection>> getInventoryStockView(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(inventoryService.findInventoryStockViews(pageable)));
     }
 
     @GetMapping("/stock-value-view")
     @Operation(summary = "Inventory stock value view", description = "Get inventory stock with value totals using DTO projection")
     @ApiResponse(responseCode = "200", description = "Inventory stock value view fetched")
-    public ResponseEntity<List<InventoryStockValueView>> getInventoryStockValueView() {
-        return ResponseEntity.ok(inventoryService.findInventoryStockValueViews());
+    public ResponseEntity<PagedModel<InventoryStockValueView>> getInventoryStockValueView(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(inventoryService.findInventoryStockValueViews(pageable)));
     }
 
 
     @GetMapping("/low-stock")
     @Operation(summary = "Low stock items", description = "Get inventory entries with quantity less than or equal to maxQty")
     @ApiResponse(responseCode = "200", description = "Low stock entries fetched")
-    public ResponseEntity<List<InventoryDTO>> getLowStock(
+    public ResponseEntity<PagedModel<InventoryDTO>> getLowStock(
             @Parameter(example = "10")
             @RequestParam("maxQty")
             @Min(value = 0, message = "maxQty cannot be negative")
-            int maxQty
+            int maxQty,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "itemCode") Pageable pageable
     ) {
-        return ResponseEntity.ok(inventoryService.findLowStock(maxQty));
+        return ResponseEntity.ok(new PagedModel<>(inventoryService.findLowStock(maxQty, sortable(pageable))));
     }
 
     @GetMapping("/in-stock")
     @Operation(summary = "In-stock items", description = "Get inventory entries with quantity greater than minQty")
     @ApiResponse(responseCode = "200", description = "In-stock entries fetched")
-    public ResponseEntity<List<InventoryDTO>> getInStockAbove(
+    public ResponseEntity<PagedModel<InventoryDTO>> getInStockAbove(
             @Parameter(example = "0")
             @RequestParam("minQty")
             @Min(value = 0, message = "minQty cannot be negative")
-            int minQty
+            int minQty,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "itemCode") Pageable pageable
     ) {
-        return ResponseEntity.ok(inventoryService.findInStockAbove(minQty));
+        return ResponseEntity.ok(new PagedModel<>(inventoryService.findInStockAbove(minQty, sortable(pageable))));
     }
 
     @GetMapping("/in-stock-native")
     @Operation(summary = "In-stock items (native)", description = "Get in-stock inventory entries via native SQL")
     @ApiResponse(responseCode = "200", description = "In-stock entries fetched")
-    public ResponseEntity<List<InventoryDTO>> getInStockNative() {
-        return ResponseEntity.ok(inventoryService.findInStockNative());
+    public ResponseEntity<PagedModel<InventoryDTO>> getInStockNative(
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE) Pageable pageable
+    ) {
+        return ResponseEntity.ok(new PagedModel<>(inventoryService.findInStockNative(pageable)));
     }
 
     @GetMapping("/for-update")
@@ -156,5 +172,8 @@ public class InventoryController {
     ) {
         return ResponseEntity.ok(inventoryService.findInventoryForUpdate(code));
     }
-}
 
+    private Pageable sortable(Pageable pageable) {
+        return PageableUtils.requireSortable(pageable, SORTABLE_PROPERTIES);
+    }
+}

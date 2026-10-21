@@ -9,7 +9,10 @@ import com.idet.pos.projection.CustomerOrderCountProjection;
 import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.projection.CustomerSummary;
 import com.idet.pos.repository.CustomerRepository;
+import com.idet.pos.util.PageableUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
@@ -81,45 +84,33 @@ public class CustomerService {
     }
 
     /**
-     * Find all customers
+     * Find one page of customers
      */
     @Transactional(readOnly = true)
-    public List<CustomerDTO> findAllCustomers() {
-        logger.info("Service: Fetching all customers");
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.findAll()) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> findAllCustomers(Pageable pageable) {
+        logger.info("Service: Fetching customers page " + pageable);
+        return customerRepository.findAll(pageable).map(this::toDTO);
     }
 
 
     @Transactional(readOnly = true)
-    public List<CustomerPurchaseStatsProjection> findCustomerPurchaseStats() {
-        return customerRepository.findCustomerPurchaseStats();
+    public Page<CustomerPurchaseStatsProjection> findCustomerPurchaseStats(Pageable pageable) {
+        return customerRepository.findCustomerPurchaseStats(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerPurchaseStatsDTO> findCustomerPurchaseStatsDto() {
-        return customerRepository.findCustomerPurchaseStatsDto();
+    public Page<CustomerPurchaseStatsDTO> findCustomerPurchaseStatsDto(Pageable pageable) {
+        return customerRepository.findCustomerPurchaseStatsDto(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> searchCustomersByName(String namePart) {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.findByNameContainingIgnoreCase(namePart)) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> searchCustomersByName(String namePart, Pageable pageable) {
+        return customerRepository.findByNameContainingIgnoreCase(namePart, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> searchCustomersByNameJpql(String namePart) {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.searchByName(namePart)) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> searchCustomersByNameJpql(String namePart, Pageable pageable) {
+        return customerRepository.searchByName(namePart, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
@@ -148,57 +139,34 @@ public class CustomerService {
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> findCustomersByAddress(String address) {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.findByAddress(address)) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> findCustomersByAddress(String address, Pageable pageable) {
+        return customerRepository.findByAddress(address, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> searchCustomersByEmail(String email) {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.searchByEmail(email)) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> searchCustomersByEmail(String email, Pageable pageable) {
+        return customerRepository.searchByEmail(email, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> searchCustomersByAddress(String address) {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.searchByAddress(address)) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> searchCustomersByAddress(String address, Pageable pageable) {
+        return customerRepository.searchByAddress(address, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> searchCustomersByNameEmailAddress(String keyword) {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.searchByNameOrEmailOrAddress(keyword, keyword, keyword)) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> searchCustomersByNameEmailAddress(String keyword, Pageable pageable) {
+        return customerRepository.searchByNameOrEmailOrAddress(keyword, keyword, keyword, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> searchCustomersByNameEmailAddressId(String keyword) {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.searchByNameOrEmailOrAddressOrId(keyword, keyword, keyword, keyword)) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> searchCustomersByNameEmailAddressId(String keyword, Pageable pageable) {
+        return customerRepository.searchByNameOrEmailOrAddressOrId(keyword, keyword, keyword, keyword, pageable)
+                .map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerDTO> findAllCustomersNative() {
-        List<CustomerDTO> dtos = new ArrayList<>();
-        for (Customer entity : customerRepository.findAllNative()) {
-            dtos.add(toDTO(entity));
-        }
-        return dtos;
+    public Page<CustomerDTO> findAllCustomersNative(Pageable pageable) {
+        return customerRepository.findAllNative(PageableUtils.withoutSort(pageable)).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
@@ -211,18 +179,18 @@ public class CustomerService {
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerBasicProjection> findCustomersWithOrders() {
-        return customerRepository.findCustomersWithOrders();
+    public Page<CustomerBasicProjection> findCustomersWithOrders(Pageable pageable) {
+        return customerRepository.findCustomersWithOrders(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerOrderCountProjection> findCustomersWithOrderCount() {
-        return customerRepository.findCustomersWithOrderCount();
+    public Page<CustomerOrderCountProjection> findCustomersWithOrderCount(Pageable pageable) {
+        return customerRepository.findCustomersWithOrderCount(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<CustomerSummary> findCustomerSummaries() {
-        return customerRepository.findCustomerSummaries();
+    public Page<CustomerSummary> findCustomerSummaries(Pageable pageable) {
+        return customerRepository.findCustomerSummaries(PageableUtils.withoutSort(pageable));
     }
 
     private CustomerDTO toDTO(Customer entity) {

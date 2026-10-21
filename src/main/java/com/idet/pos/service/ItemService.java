@@ -7,6 +7,8 @@ import com.idet.pos.exception.ResourceNotFoundException;
 import com.idet.pos.repository.InventoryRepository;
 import com.idet.pos.repository.ItemRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
@@ -93,53 +95,33 @@ public class ItemService {
     }
 
     /**
-     * Find all items
+     * Find one page of items
      */
     @Transactional(readOnly = true)
-    public List<ItemDTO> findAllItems() {
-        logger.info("Service: Fetching all items");
-        List<ItemDTO> dtos = new ArrayList<>();
-        for (Item entity : itemRepository.findAll()) {
-            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
-        }
-        return dtos;
+    public Page<ItemDTO> findAllItems(Pageable pageable) {
+        logger.info("Service: Fetching items page " + pageable);
+        return itemRepository.findAll(pageable).map(this::toDTO);
     }
 
 
     @Transactional(readOnly = true)
-    public List<ItemDTO> searchItemsByDescription(String keyword) {
-        List<ItemDTO> dtos = new ArrayList<>();
-        for (Item entity : itemRepository.findByDescriptionContainingIgnoreCase(keyword)) {
-            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
-        }
-        return dtos;
+    public Page<ItemDTO> searchItemsByDescription(String keyword, Pageable pageable) {
+        return itemRepository.findByDescriptionContainingIgnoreCase(keyword, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<ItemDTO> findItemsByMinPrice(double minPrice) {
-        List<ItemDTO> dtos = new ArrayList<>();
-        for (Item entity : itemRepository.findByUnitPriceGreaterThanEqual(minPrice)) {
-            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
-        }
-        return dtos;
+    public Page<ItemDTO> findItemsByMinPrice(double minPrice, Pageable pageable) {
+        return itemRepository.findByUnitPriceGreaterThanEqual(minPrice, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<ItemDTO> findItemsByCodeContains(String codePart) {
-        List<ItemDTO> dtos = new ArrayList<>();
-        for (Item entity : itemRepository.findByCodeContainingIgnoreCase(codePart)) {
-            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
-        }
-        return dtos;
+    public Page<ItemDTO> findItemsByCodeContains(String codePart, Pageable pageable) {
+        return itemRepository.findByCodeContainingIgnoreCase(codePart, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
-    public List<ItemDTO> findItemsByPriceRange(double minPrice, double maxPrice) {
-        List<ItemDTO> dtos = new ArrayList<>();
-        for (Item entity : itemRepository.findByUnitPriceBetween(minPrice, maxPrice)) {
-            dtos.add(new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice()));
-        }
-        return dtos;
+    public Page<ItemDTO> findItemsByPriceRange(double minPrice, double maxPrice, Pageable pageable) {
+        return itemRepository.findByUnitPriceBetween(minPrice, maxPrice, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
@@ -154,6 +136,10 @@ public class ItemService {
     @Transactional(readOnly = true)
     public boolean existsByDescriptionIgnoreCase(String description) {
         return itemRepository.existsByDescriptionIgnoreCase(description);
+    }
+
+    private ItemDTO toDTO(Item entity) {
+        return new ItemDTO(entity.getCode(), entity.getDescription(), entity.getUnitPrice());
     }
 }
 

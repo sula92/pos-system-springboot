@@ -3,6 +3,8 @@ package com.idet.pos.repository;
 import com.idet.pos.dto.InventoryStockValueView;
 import com.idet.pos.entity.Inventory;
 import com.idet.pos.projection.InventoryStockViewProjection;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -17,40 +19,41 @@ import java.util.Optional;
 public interface InventoryRepository extends JpaRepository<Inventory, String> {
 
     // Derived query examples (no @Query annotation required).
-    List<Inventory> findByQtyGreaterThanOrderByQtyDesc(int minQty);
+    Page<Inventory> findByQtyGreaterThanOrderByQtyDesc(int minQty, Pageable pageable);
 
-    List<Inventory> findByQtyLessThanEqualOrderByQtyAsc(int maxQty);
-
-    @Query("SELECT i FROM Inventory i ORDER BY i.itemCode")
-    List<Inventory> findAllOrderByItemCode();
+    Page<Inventory> findByQtyLessThanEqualOrderByQtyAsc(int maxQty, Pageable pageable);
 
     //pessimistic lock is used to prevent concurrent updates. it locks the row during the transaction where as optimistic lock uses versioning.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM Inventory i WHERE i.itemCode = :itemCode")
     Optional<Inventory> findByItemCodeForUpdate(@Param("itemCode") String itemCode);
 
-    @Query(value = "SELECT * FROM inventory WHERE qty_on_hand > 0 ORDER BY item_code", nativeQuery = true)
-    List<Inventory> findInStockNative();
+    @Query(value = "SELECT * FROM inventory WHERE qty_on_hand > 0 ORDER BY item_code",
+            countQuery = "SELECT COUNT(*) FROM inventory WHERE qty_on_hand > 0",
+            nativeQuery = true)
+    Page<Inventory> findInStockNative(Pageable pageable);
 
     // Projection query for stock dashboards with item info and inventory value calculation.
-    @Query("SELECT inv.itemCode AS itemCode, " +
+    @Query(value = "SELECT inv.itemCode AS itemCode, " +
             "it.description AS description, " +
             "it.unitPrice AS unitPrice, " +
             "inv.qty AS qty, " +
             "(inv.qty * it.unitPrice) AS inventoryValue " +
             "FROM Inventory inv JOIN inv.item it " +
-            "ORDER BY it.description")
-    List<InventoryStockViewProjection> findInventoryStockViews();
+            "ORDER BY it.description, inv.itemCode",
+            countQuery = "SELECT COUNT(inv) FROM Inventory inv")
+    Page<InventoryStockViewProjection> findInventoryStockViews(Pageable pageable);
 
     // Record projection alternative for a stable API/report output format.
-    @Query("SELECT new com.idet.pos.dto.InventoryStockValueView(" +
+    @Query(value = "SELECT new com.idet.pos.dto.InventoryStockValueView(" +
             "inv.itemCode, " +
             "it.description, " +
             "it.unitPrice, " +
             "inv.qty, " +
             "(inv.qty * it.unitPrice)) " +
             "FROM Inventory inv JOIN inv.item it " +
-            "ORDER BY it.description")
-    List<InventoryStockValueView> findInventoryStockValueViews();
+            "ORDER BY it.description, inv.itemCode",
+            countQuery = "SELECT COUNT(inv) FROM Inventory inv")
+    Page<InventoryStockValueView> findInventoryStockValueViews(Pageable pageable);
 }
 

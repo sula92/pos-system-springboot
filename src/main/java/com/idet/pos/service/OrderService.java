@@ -17,7 +17,11 @@ import com.idet.pos.repository.InventoryRepository;
 import com.idet.pos.repository.ItemRepository;
 import com.idet.pos.repository.OrderDetailRepository;
 import com.idet.pos.repository.OrderRepository;
+import com.idet.pos.util.PageableUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.logging.Logger;
 
 /**
@@ -156,30 +161,22 @@ public class OrderService {
     }
 
     /**
-     * Find all orders with their details
+     * Find one page of orders with their details
      */
     @Transactional(readOnly = true)
-    public List<OrderDTO> findAllOrders() {
-        List<OrderDTO> dtos = new ArrayList<>();
-        for (Order orderEntity : orderRepository.findAllJoinFetch()) {
-            List<OrderDetailDTO> detailDTOs = new ArrayList<>();
-            for (OrderDetail d : orderEntity.getOrderDetails()) {
-                detailDTOs.add(new OrderDetailDTO(d.getOrderId(), d.getItemCode(), d.getQty(), d.getUnitPrice()));
-            }
-            dtos.add(new OrderDTO(orderEntity.getOrderId(), orderEntity.getDate(), orderEntity.getCustomerId(), detailDTOs));
-        }
-        return dtos;
+    public Page<OrderDTO> findAllOrders(Pageable pageable) {
+        return loadOrderPage(orderRepository.findOrderIds(pageable), orderRepository::findAllWithDetailsByIdIn);
     }
 
 
     @Transactional(readOnly = true)
-    public List<OrderSummaryProjection> findOrderSummaries() {
-        return orderRepository.findOrderSummaries();
+    public Page<OrderSummaryProjection> findOrderSummaries(Pageable pageable) {
+        return orderRepository.findOrderSummaries(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<OrderSummaryDTO> findOrderSummariesDto() {
-        return orderRepository.findOrderSummariesDto();
+    public Page<OrderSummaryDTO> findOrderSummariesDto(Pageable pageable) {
+        return orderRepository.findOrderSummariesDto(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
@@ -190,8 +187,8 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDTO> findAllOrdersByDetailsGraph() {
-        return toDTOList(orderRepository.findAllWithDetailsGraph());
+    public Page<OrderDTO> findAllOrdersByDetailsGraph(Pageable pageable) {
+        return loadOrderPage(orderRepository.findOrderIds(pageable), orderRepository::findAllWithDetailsGraphByIdIn);
     }
 
     @Transactional(readOnly = true)
@@ -202,8 +199,9 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDTO> findAllOrdersNativeOrderByDateDesc() {
-        return toDTOList(orderRepository.findAllNativeOrderByDateDesc());
+    public Page<OrderDTO> findAllOrdersNativeOrderByDateDesc(Pageable pageable) {
+        return loadOrderPage(orderRepository.findOrderIdsNativeOrderByDateDesc(PageableUtils.withoutSort(pageable)),
+                orderRepository::findAllWithDetailsByIdIn);
     }
 
     @Transactional(readOnly = true)
@@ -212,8 +210,9 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDTO> findOrdersByCustomerId(String customerId) {
-        return toDTOList(orderRepository.findByCustomerId(customerId));
+    public Page<OrderDTO> findOrdersByCustomerId(String customerId, Pageable pageable) {
+        return loadOrderPage(orderRepository.findOrderIdsByCustomerId(customerId, pageable),
+                orderRepository::findAllWithDetailsByIdIn);
     }
 
     @Transactional(readOnly = true)
@@ -227,18 +226,18 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderSummary> findOrderSummariesWithConstructor() {
-        return orderRepository.findOrderSummariesWithConstructor();
+    public Page<OrderSummary> findOrderSummariesWithConstructor(Pageable pageable) {
+        return orderRepository.findOrderSummariesWithConstructor(PageableUtils.withoutSort(pageable));
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDTO> findAllOrdersWithCustomer() {
-        return toDTOList(orderRepository.findAllWithCustomer());
+    public Page<OrderDTO> findAllOrdersWithCustomer(Pageable pageable) {
+        return loadOrderPage(orderRepository.findOrderIds(pageable), orderRepository::findAllWithDetailsByIdIn);
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDTO> findAllOrdersWithCustomerAndDetails() {
-        return toDTOList(orderRepository.findAllWithCustomerAndDetails());
+    public Page<OrderDTO> findAllOrdersWithCustomerAndDetails(Pageable pageable) {
+        return loadOrderPage(orderRepository.findOrderIds(pageable), orderRepository::findAllWithDetailsByIdIn);
     }
 
     @Transactional(readOnly = true)
@@ -275,6 +274,28 @@ public class OrderService {
     private String generateOrderId() {
         List<Order> allOrders = orderRepository.findAll();
         return "O" + (allOrders.size() + 1);
+    }
+
+    /**
+     * Second paging step: fetch the orders of one id page together with their details,
+     * keep the order of the id page, and wrap them in a page with the id query's total.
+     */
+    private Page<OrderDTO> loadOrderPage(Page<String> idPage, Function<List<String>, List<Order>> fetchWithDetails) {
+        if (idPage.isEmpty()) {
+            return new PageImpl<>(List.of(), idPage.getPageable(), idPage.getTotalElements());
+        }
+        Map<String, Order> ordersById = new HashMap<>();
+        for (Order order : fetchWithDetails.apply(idPage.getContent())) {
+            ordersById.put(order.getOrderId(), order);
+        }
+        List<OrderDTO> dtos = new ArrayList<>();
+        for (String orderId : idPage.getContent()) {
+            Order order = ordersById.get(orderId);
+            if (order != null) {
+                dtos.add(toDTO(order));
+            }
+        }
+        return new PageImpl<>(dtos, idPage.getPageable(), idPage.getTotalElements());
     }
 
     private List<OrderDTO> toDTOList(List<Order> orders) {

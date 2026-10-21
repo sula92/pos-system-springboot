@@ -9,6 +9,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -55,19 +59,32 @@ class CustomerServiceTest {
     }
 
     @Test
-    void findAllCustomers_mapsEntityListToDtoList() {
+    void findAllCustomers_mapsEntityPageToDtoPage() {
+        Pageable pageable = PageRequest.of(0, 2);
         List<Customer> entities = List.of(
                 new Customer("C001", "Nimal", "Colombo", "nimal@example.com"),
                 new Customer("C002", "Kamal", "Galle", "kamal@example.com")
         );
-        when(customerRepository.findAll()).thenReturn(entities);
+        when(customerRepository.findAll(pageable)).thenReturn(new PageImpl<>(entities, pageable, 5));
 
-        List<CustomerDTO> result = customerService.findAllCustomers();
+        Page<CustomerDTO> result = customerService.findAllCustomers(pageable);
 
-        assertEquals(2, result.size());
-        assertEquals("C001", result.get(0).getId());
-        assertEquals("C002", result.get(1).getId());
-        verify(customerRepository).findAll();
+        assertEquals(2, result.getContent().size());
+        assertEquals("C001", result.getContent().get(0).getId());
+        assertEquals("C002", result.getContent().get(1).getId());
+        assertEquals(5, result.getTotalElements());
+        assertEquals(3, result.getTotalPages());
+        verify(customerRepository).findAll(pageable);
+    }
+
+    @Test
+    void findCustomerSummaries_dropsClientSortForReportQuery() {
+        Pageable requested = PageRequest.of(1, 10, org.springframework.data.domain.Sort.by("name"));
+        when(customerRepository.findCustomerSummaries(any(Pageable.class))).thenReturn(Page.empty());
+
+        customerService.findCustomerSummaries(requested);
+
+        verify(customerRepository).findCustomerSummaries(PageRequest.of(1, 10));
     }
 
     @Test

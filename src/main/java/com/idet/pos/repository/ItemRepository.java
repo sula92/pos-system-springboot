@@ -20,15 +20,15 @@ public interface ItemRepository extends JpaRepository<Item, String> {
 
 
     // Derived query examples (no @Query annotation required).
-    List<Item> findByDescriptionContainingIgnoreCase(String keyword);
+    Page<Item> findByDescriptionContainingIgnoreCase(String keyword, Pageable pageable);
 
-    List<Item> findByUnitPriceGreaterThanEqual(double minPrice);
+    Page<Item> findByUnitPriceGreaterThanEqual(double minPrice, Pageable pageable);
 
     boolean existsByDescriptionIgnoreCase(String description);
 
-    List<Item> findByCodeContainingIgnoreCase(String codePart);
+    Page<Item> findByCodeContainingIgnoreCase(String codePart, Pageable pageable);
 
-    List<Item> findByUnitPriceBetween(double minPrice, double maxPrice);
+    Page<Item> findByUnitPriceBetween(double minPrice, double maxPrice, Pageable pageable);
 
     List<Item> findByCode(String code);
 }

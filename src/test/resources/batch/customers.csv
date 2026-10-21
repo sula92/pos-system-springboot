@@ -1,0 +1,4 @@
+id,name,address,email
+C901,Batch Customer One,Colombo,one@example.com
+C902,Batch Customer Two,,two@example.com
+BAD1,Invalid Id,Kandy,bad@example.com

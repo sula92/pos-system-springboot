@@ -17,7 +17,12 @@ import jakarta.validation.Validator;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
+import com.idet.pos.util.PageableUtils;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -36,13 +41,14 @@ import java.util.logging.Logger;
 public class ItemController {
 
     private static final Logger logger = Logger.getLogger(ItemController.class.getName());
+    private static final Set<String> SORTABLE_PROPERTIES = Set.of("code", "description", "unitPrice");
     @Autowired
     private ItemService itemService;
 
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @GetMapping
-    @Operation(summary = "Get items", description = "Fetch all items or a single item by code")
+    @Operation(summary = "Get items", description = "Fetch one page of items, or a single item by code")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Items fetched successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid item code format")
@@ -51,16 +57,16 @@ public class ItemController {
             @Parameter(example = "I001")
             @RequestParam(name = "code", required = false)
             @Pattern(regexp = "^I\\d{3}$", message = "Invalid item code format. Expected format: I followed by 3 digits (e.g. I001)")
-            String code
+            String code,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "code") Pageable pageable
     ) {
         if (code != null) {
             validateItemCode(code);
             return ResponseEntity.ok(itemService.findItem(code));
         }
 
-        logger.info("Fetching all items");
-        List<ItemDTO> all = itemService.findAllItems();
-        return ResponseEntity.ok(all);
+        logger.info("Fetching items page " + pageable);
+        return ResponseEntity.ok(new PagedModel<>(itemService.findAllItems(sortable(pageable))));
     }
 
     @PostMapping
@@ -134,44 +140,47 @@ public class ItemController {
     @GetMapping("/search")
     @Operation(summary = "Search items by description", description = "Search items by description keyword")
     @ApiResponse(responseCode = "200", description = "Matching items fetched")
-    public ResponseEntity<List<ItemDTO>> searchItems(
+    public ResponseEntity<PagedModel<ItemDTO>> searchItems(
             @Parameter(example = "rice")
             @RequestParam("keyword")
             @NotBlank(message = "Keyword is required for item search")
-            String keyword
+            String keyword,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "code") Pageable pageable
     ) {
-        return ResponseEntity.ok(itemService.searchItemsByDescription(keyword));
+        return ResponseEntity.ok(new PagedModel<>(itemService.searchItemsByDescription(keyword, sortable(pageable))));
     }
 
 
     @GetMapping("/by-min-price")
     @Operation(summary = "Get items by minimum price", description = "Fetch items with unit price greater than or equal to minPrice")
     @ApiResponse(responseCode = "200", description = "Items fetched successfully")
-    public ResponseEntity<List<ItemDTO>> getItemsByMinPrice(
+    public ResponseEntity<PagedModel<ItemDTO>> getItemsByMinPrice(
             @Parameter(example = "100.00")
             @RequestParam("minPrice")
             @PositiveOrZero(message = "minPrice cannot be negative")
-            double minPrice
+            double minPrice,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "code") Pageable pageable
     ) {
-        return ResponseEntity.ok(itemService.findItemsByMinPrice(minPrice));
+        return ResponseEntity.ok(new PagedModel<>(itemService.findItemsByMinPrice(minPrice, sortable(pageable))));
     }
 
     @GetMapping("/by-code-part")
     @Operation(summary = "Get items by code part", description = "Search items whose code contains the provided text")
     @ApiResponse(responseCode = "200", description = "Items fetched successfully")
-    public ResponseEntity<List<ItemDTO>> getItemsByCodePart(
+    public ResponseEntity<PagedModel<ItemDTO>> getItemsByCodePart(
             @Parameter(example = "I0")
             @RequestParam("codePart")
             @NotBlank(message = "codePart is required")
-            String codePart
+            String codePart,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "code") Pageable pageable
     ) {
-        return ResponseEntity.ok(itemService.findItemsByCodeContains(codePart));
+        return ResponseEntity.ok(new PagedModel<>(itemService.findItemsByCodeContains(codePart, sortable(pageable))));
     }
 
     @GetMapping("/by-price-range")
     @Operation(summary = "Get items by price range", description = "Fetch items within an inclusive min/max unit price range")
     @ApiResponse(responseCode = "200", description = "Items fetched successfully")
-    public ResponseEntity<List<ItemDTO>> getItemsByPriceRange(
+    public ResponseEntity<PagedModel<ItemDTO>> getItemsByPriceRange(
             @Parameter(example = "100.00")
             @RequestParam("minPrice")
             @PositiveOrZero(message = "Invalid price range")
@@ -179,12 +188,13 @@ public class ItemController {
             @Parameter(example = "500.00")
             @RequestParam("maxPrice")
             @PositiveOrZero(message = "Invalid price range")
-            double maxPrice
+            double maxPrice,
+            @ParameterObject @PageableDefault(size = PageableUtils.DEFAULT_PAGE_SIZE, sort = "code") Pageable pageable
     ) {
         if (minPrice > maxPrice) {
             throw new InvalidRequestException("Invalid price range");
         }
-        return ResponseEntity.ok(itemService.findItemsByPriceRange(minPrice, maxPrice));
+        return ResponseEntity.ok(new PagedModel<>(itemService.findItemsByPriceRange(minPrice, maxPrice, sortable(pageable))));
     }
 
     @GetMapping("/by-code-exact")
@@ -211,6 +221,10 @@ public class ItemController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("exists", itemService.existsByDescriptionIgnoreCase(description));
         return ResponseEntity.ok(response);
+    }
+
+    private Pageable sortable(Pageable pageable) {
+        return PageableUtils.requireSortable(pageable, SORTABLE_PROPERTIES);
     }
 
     private Map<String, Object> successResponse(String message) {
