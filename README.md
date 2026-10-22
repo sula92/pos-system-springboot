@@ -108,6 +108,40 @@ Each service also serves Swagger UI at `/pos-system/swagger-ui.html` on its own 
 | order-service | Feign calls to customer-service and item-service | Business errors (404 customer or item not found, 409 insufficient stock, 400) are passed through unchanged and do not open the circuit. Outages and timeouts become 503. |
 | customer-service | WebClient call to order-service | Empty totals: the analytics endpoints still answer, with zero orders for every customer. |
 
+## Observability
+
+Every service (gateway, customer, item, order) uses Micrometer Tracing with Brave and sends spans
+to Zipkin. One request keeps one trace id across the gateway, the Feign calls from order-service
+and the WebClient call from customer-service. Each console log line shows `[traceId-spanId]`.
+
+**Start the local stack** (Zipkin, Elasticsearch, Logstash, Kibana; development only, Elasticsearch
+security is off):
+
+```
+docker compose -f observability/docker-compose.yml up -d
+```
+
+**Ship logs to ELK:** start the services with `SPRING_PROFILES_INCLUDE=elk`. Log events then go to
+Logstash as JSON (with `traceId`, `spanId` and `app`) and land in one daily index per service, for
+example `pos-order-service-2026.10.22`. Without the `elk` profile, logs go to the console only and
+nothing connects to Logstash.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ZIPKIN_ENDPOINT` | `http://localhost:9411/api/v2/spans` | Where spans are sent |
+| `TRACING_SAMPLING_PROBABILITY` | `1.0` | Share of requests traced (lower it outside development) |
+| `LOGSTASH_DESTINATION` | `localhost:5000` | Logstash TCP input (used only with the `elk` profile) |
+
+**Find a request:**
+- Zipkin: http://localhost:9411, search by service or paste a trace id.
+- Kibana: http://localhost:5601, create a data view for `pos-*`, then search `traceId:<id>` to see
+  the log lines of every service for that request.
+
+Actuator exposes only `health` and `info` on each service's own port (for example
+`http://localhost:8083/pos-system/actuator/health`); the gateway does not route `/actuator`.
+Method arguments are not written to the logs, so customer names, addresses and emails stay out of
+Elasticsearch.
+
 ## Known limitations
 
 - There is no distributed transaction. If an order save fails and the `release` call also fails,

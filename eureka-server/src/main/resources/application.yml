@@ -13,3 +13,8 @@ eureka:
     fetch-registry: false
     service-url:
       defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+
+# Logstash TCP destination, used only when the 'elk' profile is active (see logback-spring.xml)
+pos:
+  logstash:
+    destination: ${LOGSTASH_DESTINATION:localhost:5000}

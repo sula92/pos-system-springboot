@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: api-gateway
+  reactor:
+    # Carry the trace context across Reactor thread hops
+    context-propagation: auto
   cloud:
     gateway:
       server:
@@ -70,3 +73,21 @@ resilience4j:
     configs:
       default:
         timeout-duration: 5s
+
+# Observability - Micrometer Tracing (Brave) exported to Zipkin; trace ids go into every log line
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      zipkin:
+        endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# Logstash TCP destination, used only when the 'elk' profile is active (see logback-spring.xml)
+pos:
+  logstash:
+    destination: ${LOGSTASH_DESTINATION:localhost:5000}

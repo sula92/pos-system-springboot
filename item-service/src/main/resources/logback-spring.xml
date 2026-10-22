@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Console logging keeps Spring Boot's default pattern, which includes [traceId-spanId] when tracing is on.
+  With the 'elk' profile (SPRING_PROFILES_INCLUDE=elk) log events are also sent as JSON to Logstash over TCP.
+  The Logstash appender is asynchronous and reconnects on its own, so a missing Logstash never blocks the service.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="item-service"/>
+    <springProperty scope="context" name="LOGSTASH_DESTINATION" source="pos.logstash.destination" defaultValue="localhost:5000"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <springProfile name="elk">
+        <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <destination>${LOGSTASH_DESTINATION}</destination>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"app":"${APP_NAME}"}</customFields>
+            </encoder>
+        </appender>
+        <root>
+            <appender-ref ref="LOGSTASH"/>
+        </root>
+    </springProfile>
+</configuration>

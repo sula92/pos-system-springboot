@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end smoke test: starts Eureka, the three services and the gateway from the built jars,
-# then checks registration, gateway routing, Feign order placement, the WebClient stats call
-# and the circuit-breaker fallbacks. Run after `./mvnw -B package -DskipTests` (or `verify`).
+# then checks registration, gateway routing, Feign order placement, the WebClient stats call,
+# trace-id propagation across services and the circuit-breaker fallbacks. Run after `./mvnw -B package -DskipTests` (or `verify`).
 set -euo pipefail
 
 VERSION="0.0.1-SNAPSHOT"
@@ -44,14 +44,26 @@ wait_for() {
   fail "$name: expected $expected from $url, last status was $code"
 }
 
-# status METHOD URL [JSON_BODY] -> prints the HTTP status; the body is saved to /tmp/e2e-body
+# status METHOD URL [JSON_BODY] -> prints the HTTP status; the body is saved to /tmp/e2e-body.
+# Extra curl arguments (for example headers) can be passed in the CURL_EXTRA array.
+CURL_EXTRA=()
 status() {
   local method="$1" url="$2" body="${3:-}"
   if [[ -n "$body" ]]; then
-    curl -s -o /tmp/e2e-body -w '%{http_code}' -X "$method" -H 'Content-Type: application/json' -d "$body" "$url" || true
+    curl -s -o /tmp/e2e-body -w '%{http_code}' "${CURL_EXTRA[@]}" -X "$method" -H 'Content-Type: application/json' -d "$body" "$url" || true
   else
-    curl -s -o /tmp/e2e-body -w '%{http_code}' -X "$method" "$url" || true
+    curl -s -o /tmp/e2e-body -w '%{http_code}' "${CURL_EXTRA[@]}" -X "$method" "$url" || true
   fi
+}
+
+# expect_trace TRACE_ID MODULE... -> fails unless every module log contains the trace id
+expect_trace() {
+  local trace_id="$1" module
+  shift
+  for module in "$@"; do
+    grep -q "$trace_id" "$LOG_DIR/$module.log" || fail "trace id $trace_id not found in $module log"
+    echo "ok: trace id $trace_id found in $module log"
+  done
 }
 
 expect() {
@@ -125,6 +137,19 @@ if [[ "$orders" != "1" ]]; then
   fail "purchase stats: expected 1 order for C001, got '$orders'"
 fi
 echo "ok: purchase stats via WebClient show 1 order for C001"
+
+# Tracing: a W3C traceparent sent to the gateway must be continued by every service on the path,
+# so the same trace id shows up in their log lines (Feign hop: order -> customer, item; WebClient hop: customer -> order).
+ORDER_TRACE="4bf92f3577b34da6a3ce929d0e0e4736"
+CURL_EXTRA=(-H "traceparent: 00-$ORDER_TRACE-00f067aa0ba902b7-01")
+expect "place traced order" 201 "$(status POST "$GW/order" '{"customerId":"C001","orderDetails":[{"itemCode":"I001","qty":1,"unitPrice":250.0}]}')"
+STATS_TRACE="5c0a3e2f9d8b4c71a6e5f4d3c2b1a090"
+CURL_EXTRA=(-H "traceparent: 00-$STATS_TRACE-00f067aa0ba902b8-01")
+expect "traced purchase stats" 200 "$(status GET "$GW/customer/purchase-stats-dto")"
+CURL_EXTRA=()
+sleep 2
+expect_trace "$ORDER_TRACE" order-service customer-service item-service
+expect_trace "$STATS_TRACE" customer-service order-service
 
 # Internal endpoints must not be reachable through the gateway
 expect "internal order endpoint blocked" 404 "$(status GET "$GW/order/internal/customer-totals")"

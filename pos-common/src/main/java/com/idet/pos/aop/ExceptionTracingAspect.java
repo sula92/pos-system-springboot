@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * Logs exception context from service/repository calls.
@@ -23,7 +24,8 @@ public class ExceptionTracingAspect {
 
     /**
      * AfterThrowing advice runs only when an exception escapes the target method.
-     * It captures method signature + arguments + exception type/message.
+     * It captures method signature + argument types + exception type/message.
+     * Argument values are not logged: they can hold customer data (name, address, email).
      */
     @AfterThrowing(
             pointcut = "execution(* com.idet.pos.service..*(..)) || execution(* com.idet.pos.repository..*(..))",
@@ -31,10 +33,12 @@ public class ExceptionTracingAspect {
     )
     public void logExceptionContext(JoinPoint joinPoint, Throwable exception) {
         String method = joinPoint.getSignature().toShortString();
-        String args = Arrays.toString(joinPoint.getArgs());
+        String argTypes = Arrays.stream(joinPoint.getArgs())
+                .map(arg -> arg == null ? "null" : arg.getClass().getSimpleName())
+                .collect(Collectors.joining(", ", "[", "]"));
 
         logger.severe("[AOP-EX] Method failed: " + method +
-                " | args=" + args +
+                " | argTypes=" + argTypes +
                 " | type=" + exception.getClass().getSimpleName() +
                 " | message=" + exception.getMessage());
     }
