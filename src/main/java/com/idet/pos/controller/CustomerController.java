@@ -45,6 +45,7 @@ public class CustomerController {
 
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
+
     @GetMapping
     @Operation(summary = "Get customers", description = "Fetch all customers or a single customer by id")
     @ApiResponses({

@@ -9,7 +9,7 @@ import com.idet.pos.projection.CustomerOrderCountProjection;
 import com.idet.pos.projection.CustomerPurchaseStatsProjection;
 import com.idet.pos.projection.CustomerSummary;
 import com.idet.pos.repository.CustomerRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
@@ -27,8 +27,14 @@ public class CustomerService {
 
     private static final Logger logger = Logger.getLogger(CustomerService.class.getName());
 
-    @Autowired
-    private CustomerRepository customerRepository;
+    private final CustomerRepository customerRepository;
+    private final ModelMapper modelMapper;
+
+    public CustomerService(CustomerRepository customerRepository, ModelMapper modelMapper) {
+        this.customerRepository = customerRepository;
+        // Use Spring-provided ModelMapper in production, but keep tests safe when null is passed.
+        this.modelMapper = (modelMapper != null) ? modelMapper : new ModelMapper();
+    }
 
     /**
      * Save a new customer
@@ -36,11 +42,10 @@ public class CustomerService {
      */
     public CustomerDTO saveCustomer(CustomerDTO dto) {
         logger.info("Service: Saving customer: " + dto.getName());
-        Customer entity = new Customer(
-                dto.getId(), dto.getName(), dto.getAddress(), dto.getEmail());
+        Customer entity = toEntity(dto);
         Customer saved = customerRepository.save(entity);
         logger.info("Service: Customer saved successfully with ID: " + saved.getId());
-        return new CustomerDTO(saved.getId(), saved.getName(), saved.getAddress(), saved.getEmail());
+        return toDTO(saved);
     }
 
     /**
@@ -51,11 +56,10 @@ public class CustomerService {
         if (!customerRepository.existsById(dto.getId())) {
             throw new ResourceNotFoundException("Customer not found: " + dto.getId());
         }
-        Customer entity = new Customer(
-                dto.getId(), dto.getName(), dto.getAddress(), dto.getEmail());
+        Customer entity = toEntity(dto);
         Customer updated = customerRepository.save(entity);
         logger.info("Service: Customer updated successfully: " + dto.getId());
-        return new CustomerDTO(updated.getId(), updated.getName(), updated.getAddress(), updated.getEmail());
+        return toDTO(updated);
     }
 
     /**
@@ -76,7 +80,7 @@ public class CustomerService {
     @Transactional(readOnly = true)
     public CustomerDTO findCustomer(String id) {
         return customerRepository.findById(id)
-                .map(entity -> new CustomerDTO(entity.getId(), entity.getName(), entity.getAddress(), entity.getEmail()))
+                .map(this::toDTO)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + id));
     }
 
@@ -225,8 +229,14 @@ public class CustomerService {
         return customerRepository.findCustomerSummaries();
     }
 
+    private Customer toEntity(CustomerDTO dto) {
+        // Keep mapping centralized so service methods stay focused on business flow.
+        return modelMapper.map(dto, Customer.class);
+    }
+
     private CustomerDTO toDTO(Customer entity) {
-        return new CustomerDTO(entity.getId(), entity.getName(), entity.getAddress(), entity.getEmail());
+        // Reverse mapping for API responses.
+        return modelMapper.map(entity, CustomerDTO.class);
     }
 }
 

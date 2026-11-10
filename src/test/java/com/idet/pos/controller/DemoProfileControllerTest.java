@@ -12,6 +12,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +40,49 @@ class DemoProfileControllerTest {
         assertEquals("Running in DEV profile", body.get("profileMessage"));
         assertEquals("This bean is available in all environments", body.get("commonBeanMessage"));
         assertEquals("IDT POS Demo Store (DEV)", body.get("storeName"));
+    }
+
+    @Test
+    void getXmlCustomerDemo_returnsXmlBody() {
+        Environment environment = mock(Environment.class);
+        when(environment.getActiveProfiles()).thenReturn(new String[]{"dev"});
+
+        AppProfileMessageProvider messageProvider = () -> "Running in DEV profile";
+        DemoEnvironmentBean commonBean = new DemoEnvironmentBean("This bean is available in all environments");
+
+        PosConfigurationProperties properties = new PosConfigurationProperties();
+        properties.setStoreName("IDT POS Demo Store (DEV)");
+
+        DemoProfileController controller = new DemoProfileController(environment, messageProvider, commonBean, properties);
+        var response = controller.getXmlCustomerDemo();
+        var payload = response.getBody();
+
+        assertEquals("application/xml", response.getHeaders().getContentType().toString());
+        assertNotNull(payload);
+        assertEquals("C001", payload.getId());
+        assertEquals("Nimal", payload.getName());
+        assertEquals("nimal@example.com", payload.getEmail());
+    }
+
+    @Test
+    void getHateoasCustomerDemo_returnsPayloadWithLinks() {
+        Environment environment = mock(Environment.class);
+        when(environment.getActiveProfiles()).thenReturn(new String[]{"dev"});
+
+        AppProfileMessageProvider messageProvider = () -> "Running in DEV profile";
+        DemoEnvironmentBean commonBean = new DemoEnvironmentBean("This bean is available in all environments");
+
+        PosConfigurationProperties properties = new PosConfigurationProperties();
+        properties.setStoreName("IDT POS Demo Store (DEV)");
+
+        DemoProfileController controller = new DemoProfileController(environment, messageProvider, commonBean, properties);
+        var model = controller.getHateoasCustomerDemo("C001");
+
+        assertNotNull(model.getContent());
+        assertEquals("C001", model.getContent().get("id"));
+        assertTrue(model.getRequiredLink("self").getHref().contains("/demo/hateoas/customer/C001"));
+        assertTrue(model.getRequiredLink("profile-demo").getHref().contains("/demo/profile"));
+        assertTrue(model.getRequiredLink("xml-demo").getHref().contains("/demo/xml-customer"));
     }
 }
 
